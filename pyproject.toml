@@ -1,0 +1,26 @@
+[project]
+name = "twitter-translate-bot"
+version = "0.1.0"
+description = "Telegram bot that translates Twitter/X posts using Gemini"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "Kshitish Deshpande", email = "me@ksdfg.dev" }
+]
+
+dependencies = [
+    "beautifulsoup4>=4.14.0",
+    "google-genai>=1.55.0",
+    "httpx>=0.28.0",
+    "python-dotenv>=1.2.0",
+    "python-telegram-bot>=22.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.0",
+]
+
+[tool.ruff]
+line-length = 120
+exclude = ["__init__.py", ".venv"]
