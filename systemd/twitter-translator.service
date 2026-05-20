@@ -1,0 +1,27 @@
+[Unit]
+Description=Twitter/X LinkCleaner translation Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/twitter-translator
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/twitter-translator/.venv/bin/python -m app.main
+Restart=on-failure
+RestartSec=5s
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=100%
+
+# Hardening
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictRealtime=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=default.target

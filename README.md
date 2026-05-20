@@ -62,3 +62,21 @@ Start the bot:
 ```bash
 uv run python -m app.main
 ```
+
+## User systemd service
+
+A user-mode systemd unit is available at `systemd/twitter-translator.service`. It assumes the repo is cloned to `~/twitter-translator` on the target machine.
+
+```bash
+uv sync --frozen
+mkdir -p ~/.config/systemd/user
+cp systemd/twitter-translator.service ~/.config/systemd/user/twitter-translator.service
+systemctl --user daemon-reload
+systemctl --user enable --now twitter-translator.service
+```
+
+To run after login sessions end, enable lingering on the target machine:
+
+```bash
+loginctl enable-linger "$USER"
+```
