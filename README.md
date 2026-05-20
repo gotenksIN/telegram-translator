@@ -10,7 +10,9 @@ Reply to a LinkCleaner Twitter/X preview message:
 /translate@BotUserName
 ```
 
-The bot reads the replied message's Telegram link preview URL, fetches that preview page, and replies with the translation:
+The bot registers `/translate` in Telegram's command menu for private chats and groups.
+
+The bot reads the original Twitter/X status URL from the replied LinkCleaner message, rewrites it to `hitlerx.com`, fetches that preview page, and replies with the translation:
 
 ```text
 Translation:
@@ -18,7 +20,7 @@ Translation:
 ```
 
 Translations are globally limited to 3 running requests at a time and 10 accepted requests per minute.
-Only `fixupx.com` URLs from Telegram link preview metadata are fetched. LinkCleaner currently exposes the original Twitter/X URL in message text and the TweetFix preview URL through Telegram's link preview metadata; this bot intentionally uses the preview URL only.
+Only Twitter/X status URLs from the replied message text are accepted. Telegram link preview metadata is intentionally ignored because FixupX can sometimes return already-translated content.
 
 ## Configuration
 

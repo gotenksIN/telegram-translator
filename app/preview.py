@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import html
 import re
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse, urlunparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -12,32 +12,58 @@ from telegram import Message
 URL_RE = re.compile(r"https?://[^\s<>()]+", re.IGNORECASE)
 BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 TRAILING_URL_PUNCTUATION = ".,;!?)]}。．、，；：！？）］｝】」』》〉"
-LINKCLEANER_PREVIEW_HOST = "fixupx.com"
+TWITTER_HOSTS = {"twitter.com", "mobile.twitter.com", "x.com", "mobile.x.com"}
+PREVIEW_HOST = "hitlerx.com"
 
 
 def extract_preview_url(message: Message) -> str | None:
-    link_preview_options = message.link_preview_options
-    if link_preview_options is not None and link_preview_options.url:
-        url = str(link_preview_options.url)
-        if is_linkcleaner_preview_url(url):
-            return url
+    source_url = extract_twitter_status_url(message)
+    if source_url is None:
+        return None
+    return twitter_url_to_preview_url(source_url)
+
+
+def extract_twitter_status_url(message: Message) -> str | None:
+    for text in (message.text, message.caption):
+        if not text:
+            continue
+        for url in extract_urls(text):
+            if is_supported_twitter_url(urlparse(url)):
+                return url
 
     return None
 
 
+def extract_urls(text: str) -> list[str]:
+    return [match.group(0).rstrip(TRAILING_URL_PUNCTUATION) for match in URL_RE.finditer(text)]
+
+
 def extract_first_url(text: str) -> str | None:
-    match = URL_RE.search(text)
-    if match is None:
-        return None
-    return match.group(0).rstrip(TRAILING_URL_PUNCTUATION)
+    urls = extract_urls(text)
+    return urls[0] if urls else None
 
 
-def is_linkcleaner_preview_url(url: str) -> bool:
+def twitter_url_to_preview_url(url: str) -> str | None:
     parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
+    if not is_supported_twitter_url(parsed):
+        return None
+    return urlunparse(("https", PREVIEW_HOST, parsed.path.rstrip("/"), "", "", ""))
+
+
+def is_supported_twitter_url(parsed_url: ParseResult) -> bool:
+    if parsed_url.scheme not in {"http", "https"}:
         return False
-    host = parsed.hostname or ""
-    return host == LINKCLEANER_PREVIEW_HOST
+
+    host = (parsed_url.hostname or "").removeprefix("www.")
+    if host not in TWITTER_HOSTS:
+        return False
+
+    parts = [part for part in parsed_url.path.split("/") if part]
+    if len(parts) == 3 and parts[1] == "status" and parts[2].isdigit():
+        return True
+    if len(parts) == 5 and parts[1] == "status" and parts[2].isdigit() and parts[3] == "photo" and parts[4].isdigit():
+        return True
+    return len(parts) == 3 and parts[0] == "i" and parts[1] == "status" and parts[2].isdigit()
 
 
 async def fetch_preview_text(url: str, timeout_seconds: float) -> str:
