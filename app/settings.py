@@ -29,7 +29,7 @@ def get_settings() -> Settings:
         TELEGRAM_BOT_TOKEN=_required_env("TELEGRAM_BOT_TOKEN"),
         GEMINI_API_KEY=_required_env("GEMINI_API_KEY"),
         GEMINI_API_BASE=os.environ.get("GEMINI_API_BASE") or None,
-        GEMINI_MODEL=os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview"),
+        GEMINI_MODEL=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
         TARGET_LANGUAGE=os.environ.get("TARGET_LANGUAGE", "English"),
         REQUEST_TIMEOUT_SECONDS=float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "10")),
     )
