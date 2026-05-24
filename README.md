@@ -1,18 +1,30 @@
-# twitter-translate-bot
+# telegram-translate-bot
 
-Telegram bot that translates a LinkCleaner Twitter/X preview using Gemini.
+Telegram bot that translates messages and LinkCleaner Twitter/X previews using Gemini.
 
 ## Usage
 
-Reply to a LinkCleaner Twitter/X preview message:
+The bot provides two commands:
+
+**`/translate_preview`** — Translate a replied LinkCleaner Twitter/X preview:
 
 ```text
-/translate@BotUserName
+/translate_preview@BotUserName
 ```
 
-The bot registers `/translate` in Telegram's command menu for private chats and groups.
+The bot extracts the Twitter/X status URL from the replied message, rewrites it to `hitlerx.com`, fetches that preview page, and replies with the translation.
 
-The bot reads the original Twitter/X status URL from the replied LinkCleaner message, rewrites it to `hitlerx.com`, fetches that preview page, and replies with the translation:
+**`/translate_message`** — Translate the text of any replied message directly:
+
+```text
+/translate_message@BotUserName
+```
+
+The bot takes the replied message's text/caption directly and translates it with Gemini. No URL extraction or preview fetching is involved.
+
+The bot registers both commands in Telegram's command menu for private chats and groups.
+
+Example reply format:
 
 ```text
 Translation:
@@ -20,7 +32,7 @@ Translation:
 ```
 
 Translations are globally limited to 3 running requests at a time and 10 accepted requests per minute.
-Only Twitter/X status URLs from the replied message text are accepted. Telegram link preview metadata is intentionally ignored because FixupX can sometimes return already-translated content.
+For `/translate_preview`, only Twitter/X status URLs from the replied message text are accepted. Telegram link preview metadata is intentionally ignored because FixupX can sometimes return already-translated content.
 
 ## Configuration
 
@@ -67,14 +79,14 @@ uv run python -m app.main
 
 ## User systemd service
 
-A user-mode systemd unit is available at `systemd/twitter-translator.service`. It assumes the repo is cloned to `~/twitter-translator` on the target machine.
+A user-mode systemd unit is available at `systemd/telegram-translator.service`. It assumes the repo is cloned to `~/telegram-translator` on the target machine.
 
 ```bash
 uv sync --frozen
 mkdir -p ~/.config/systemd/user
-cp systemd/twitter-translator.service ~/.config/systemd/user/twitter-translator.service
+cp systemd/telegram-translator.service ~/.config/systemd/user/telegram-translator.service
 systemctl --user daemon-reload
-systemctl --user enable --now twitter-translator.service
+systemctl --user enable --now telegram-translator.service
 ```
 
 To run after login sessions end, enable lingering on the target machine:

@@ -1,13 +1,13 @@
 [Unit]
-Description=Twitter/X LinkCleaner translation Telegram bot
+Description=Telegram translate bot (Twitter/X previews + message translation)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/twitter-translator
+WorkingDirectory=%h/telegram-translator
 Environment=PYTHONUNBUFFERED=1
-ExecStart=%h/twitter-translator/.venv/bin/python -m app.main
+ExecStart=%h/telegram-translator/.venv/bin/python -m app.main
 Restart=on-failure
 RestartSec=5s
 

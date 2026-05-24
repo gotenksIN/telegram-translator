@@ -1,11 +1,11 @@
 [project]
-name = "twitter-translate-bot"
+name = "telegram-translate-bot"
 version = "0.1.0"
-description = "Telegram bot that translates Twitter/X posts using Gemini"
+description = "Telegram bot that translates messages and Twitter/X previews using Gemini"
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [
-    { name = "Kshitish Deshpande", email = "me@ksdfg.dev" }
+    { name = "Omkar Chandorkar", email = "gotenksIN@aospa.co" }
 ]
 
 dependencies = [

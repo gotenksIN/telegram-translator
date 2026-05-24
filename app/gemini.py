@@ -21,18 +21,19 @@ def get_client(settings: Settings) -> Client:
     return _client
 
 
-async def translate_tweet(text: str, settings: Settings) -> str:
+async def translate_text(text: str, settings: Settings, *, source_type: str = "tweet") -> str:
     client = get_client(settings)
+    source_label = "message" if source_type == "message" else "Twitter/X post" if source_type == "tweet" else "web page preview"
     prompt = f"""
-Translate this Twitter/X post into {settings.TARGET_LANGUAGE}.
+Translate this {source_label} into {settings.TARGET_LANGUAGE}.
 
 Rules:
 - Preserve handles, hashtags, names, URLs, emojis, and line breaks.
 - Preserve slang naturally where possible.
 - Do not add commentary, notes, labels, or explanations.
-- If the post is already in {settings.TARGET_LANGUAGE}, return it unchanged.
+- If the text is already in {settings.TARGET_LANGUAGE}, return it unchanged.
 
-Post:
+Text:
 {text}
 """.strip()
 

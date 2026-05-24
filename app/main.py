@@ -17,8 +17,8 @@ from telegram import (
 from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from app.gemini import translate_tweet
-from app.preview import extract_preview_url, extract_twitter_status_url, fetch_preview_text
+from app.gemini import translate_text
+from app.preview import extract_first_url, extract_preview_url, extract_twitter_status_url, fetch_preview_text
 from app.settings import get_settings
 
 
@@ -34,10 +34,13 @@ MAX_TRANSLATIONS_PER_MINUTE = 10
 TRANSLATION_RATE_WINDOW_SECONDS = 60
 TRANSLATION_SEMAPHORE_KEY = "translation_semaphore"
 TRANSLATION_TIMESTAMPS_KEY = "translation_timestamps"
-BOT_COMMANDS = [BotCommand("translate", "Translate a replied LinkCleaner Twitter preview")]
+BOT_COMMANDS = [
+    BotCommand("translate_preview", "Translate a replied LinkCleaner Twitter preview"),
+    BotCommand("translate_message", "Translate the text of a replied message directly"),
+]
 
 
-async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def translate_preview_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_message is None or update.effective_chat is None:
         return
 
@@ -47,14 +50,20 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     replied_message = message.reply_to_message
     if replied_message is None:
-        await message.reply_text("Please reply to a message containing Twitter URL")
+        await message.reply_text("Please reply to a message containing a URL to translate its preview")
         return
 
     preview_url = extract_preview_url(replied_message)
-    if preview_url is None:
-        await message.reply_text("Could not find a Twitter/X status URL in the replied message.")
-        return
     source_url = extract_twitter_status_url(replied_message)
+    source_type = "tweet"
+    if preview_url is None:
+        fallback_url = extract_first_url(replied_message.text or replied_message.caption or "")
+        if fallback_url is None:
+            await message.reply_text("Could not find a URL in the replied message.")
+            return
+        preview_url = fallback_url
+        source_url = fallback_url
+        source_type = "preview"
 
     now = time.monotonic()
     semaphore = context.application.bot_data[TRANSLATION_SEMAPHORE_KEY]
@@ -81,16 +90,63 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
 
         try:
-            translation = await translate_tweet(preview_text, settings)
+            translation = await translate_text(preview_text, settings, source_type=source_type)
         except Exception:
-            logger.exception("Failed to translate tweet")
-            await reply_long_text(message, "Could not translate this tweet.")
+            logger.exception("Failed to translate preview")
+            await reply_long_text(message, "Could not translate this preview.")
             return
     finally:
         semaphore.release()
 
-    source_line = f"Translation for {source_url}:" if source_url else "Translation for replied Twitter/X status:"
+    source_line = f"Translation for {source_url}:" if source_url else "Translation for replied preview:"
     await reply_long_text(message, f"{source_line}\n\n{translation}", preview_url=preview_url)
+
+
+async def translate_message_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_message is None or update.effective_chat is None:
+        return
+
+    message = update.effective_message
+    chat = update.effective_chat
+    settings = context.application.bot_data["settings"]
+
+    replied_message = message.reply_to_message
+    if replied_message is None:
+        await message.reply_text("Please reply to a message to translate its text")
+        return
+
+    source_text = replied_message.text or replied_message.caption
+    if not source_text:
+        await message.reply_text("The replied message has no text to translate.")
+        return
+
+    now = time.monotonic()
+    semaphore = context.application.bot_data[TRANSLATION_SEMAPHORE_KEY]
+    if semaphore.locked():
+        await message.reply_text("Too many translations are running. Please try again shortly.", do_quote=True)
+        return
+
+    retry_after = reserve_translation_rate_slot(context.application.bot_data, now)
+    if retry_after is not None:
+        await message.reply_text(
+            f"Translation rate limit reached. Please try again in {retry_after} seconds.", do_quote=True
+        )
+        return
+
+    await semaphore.acquire()
+    try:
+        await context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.TYPING)
+
+        try:
+            translation = await translate_text(source_text, settings, source_type="message")
+        except Exception:
+            logger.exception("Failed to translate message")
+            await reply_long_text(message, "Could not translate this message.")
+            return
+    finally:
+        semaphore.release()
+
+    await reply_long_text(message, f"Translation:\n\n{translation}")
 
 
 async def configure_bot_commands(application: Application) -> None:
@@ -150,7 +206,8 @@ def main() -> None:
     application.bot_data["settings"] = settings
     application.bot_data[TRANSLATION_SEMAPHORE_KEY] = BoundedSemaphore(MAX_RUNNING_TRANSLATIONS)
     application.bot_data[TRANSLATION_TIMESTAMPS_KEY] = deque()
-    application.add_handler(CommandHandler("translate", translate_command))
+    application.add_handler(CommandHandler("translate_preview", translate_preview_command))
+    application.add_handler(CommandHandler("translate_message", translate_message_command))
     application.run_polling(allowed_updates=["message"])
 
 

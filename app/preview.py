@@ -70,7 +70,7 @@ async def fetch_preview_text(url: str, timeout_seconds: float) -> str:
     async with httpx.AsyncClient(
         timeout=timeout_seconds,
         follow_redirects=True,
-        headers={"User-Agent": "TelegramTwitterTranslateBot/0.1"},
+        headers={"User-Agent": "TelegramTranslateBot/0.1"},
     ) as client:
         response = await client.get(url)
         response.raise_for_status()
