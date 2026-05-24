@@ -92,7 +92,7 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
         try:
             if is_youtube_url(preview_url):
                 try:
-                    preview_text = await fetch_youtube_preview_text(preview_url, settings.REQUEST_TIMEOUT_SECONDS)
+                    preview_text = await fetch_youtube_preview_text(preview_url, settings.REQUEST_TIMEOUT_SECONDS, settings.YOUTUBE_COOKIES_PATH)
                 except Exception:
                     logger.exception("Failed to fetch YouTube metadata; falling back to generic preview")
                     preview_text = await fetch_preview_text(preview_url, settings.REQUEST_TIMEOUT_SECONDS)

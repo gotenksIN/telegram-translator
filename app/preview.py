@@ -106,15 +106,19 @@ async def fetch_preview_text(url: str, timeout_seconds: float) -> str:
     return text
 
 
-async def fetch_youtube_preview_text(url: str, timeout_seconds: float) -> str:
-    return await to_thread(_extract_youtube_preview_text, url, timeout_seconds)
+async def fetch_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None = None) -> str:
+    return await to_thread(_extract_youtube_preview_text, url, timeout_seconds, cookies_path)
 
 
-def _extract_youtube_preview_text(url: str, timeout_seconds: float) -> str:
+def _extract_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None) -> str:
     from yt_dlp import YoutubeDL
 
-    options = {
+    options: dict = {
+        "check_formats": False,
         "extract_flat": False,
+        "extractor_args": {"youtube": {"player_client": ["web"] if cookies_path else ["ios", "android", "web"]}},
+        "geo_bypass": True,
+        "ignore_no_formats_error": True,
         "ignoreerrors": False,
         "logger": _YtDlpLogger(),
         "no_warnings": True,
@@ -123,6 +127,8 @@ def _extract_youtube_preview_text(url: str, timeout_seconds: float) -> str:
         "skip_download": True,
         "socket_timeout": timeout_seconds,
     }
+    if cookies_path:
+        options["cookiefile"] = cookies_path
     with YoutubeDL(options) as ydl:
         info = ydl.extract_info(url, download=False)
 

@@ -22,6 +22,7 @@ class Settings:
     GEMINI_MODEL: str
     TARGET_LANGUAGE: str
     REQUEST_TIMEOUT_SECONDS: float
+    YOUTUBE_COOKIES_PATH: str | None
 
 
 def get_settings() -> Settings:
@@ -32,4 +33,5 @@ def get_settings() -> Settings:
         GEMINI_MODEL=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
         TARGET_LANGUAGE=os.environ.get("TARGET_LANGUAGE", "English"),
         REQUEST_TIMEOUT_SECONDS=float(os.environ.get("REQUEST_TIMEOUT_SECONDS", "10")),
+        YOUTUBE_COOKIES_PATH=os.environ.get("YOUTUBE_COOKIES_PATH") or None,
     )
