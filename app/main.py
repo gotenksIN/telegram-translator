@@ -60,6 +60,10 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
         await message.reply_text("Please reply to a message containing a URL to translate its preview")
         return
 
+    if replied_message.from_user and replied_message.from_user.id == context.bot.id:
+        await message.reply_text("The message has already been translated", do_quote=True)
+        return
+
     preview_url = extract_preview_url(replied_message)
     source_url = extract_twitter_status_url(replied_message)
     source_type = "tweet"
@@ -127,6 +131,10 @@ async def translate_message_command(update: Update, context: ContextTypes.DEFAUL
     replied_message = message.reply_to_message
     if replied_message is None:
         await message.reply_text("Please reply to a message to translate its text")
+        return
+
+    if replied_message.from_user and replied_message.from_user.id == context.bot.id:
+        await message.reply_text("The message has already been translated", do_quote=True)
         return
 
     source_text = replied_message.text or replied_message.caption
