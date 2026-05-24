@@ -6,13 +6,13 @@ Telegram bot that translates messages and LinkCleaner Twitter/X previews using G
 
 The bot provides two commands:
 
-**`/translate_preview`** — Translate a replied LinkCleaner Twitter/X preview:
+**`/translate_preview`** — Translate a replied link preview:
 
 ```text
 /translate_preview@BotUserName
 ```
 
-The bot extracts the Twitter/X status URL from the replied message, rewrites it to `hitlerx.com`, fetches that preview page, and replies with the translation.
+For Twitter/X status URLs, the bot rewrites the link to `hitlerx.com`, fetches that preview page, and replies with the translation. For YouTube links, it uses `yt-dlp` metadata so the title, description, and tags are translated instead of YouTube's generic page description. Other URLs fall back to OpenGraph/meta preview extraction.
 
 **`/translate_message`** — Translate the text of any replied message directly:
 
@@ -32,7 +32,7 @@ Translation:
 ```
 
 Translations are globally limited to 3 running requests at a time and 10 accepted requests per minute.
-For `/translate_preview`, only Twitter/X status URLs from the replied message text are accepted. Telegram link preview metadata is intentionally ignored because FixupX can sometimes return already-translated content.
+For `/translate_preview`, Telegram link preview metadata is intentionally ignored because the Bot API does not expose the resolved preview text to bots.
 
 ## Configuration
 

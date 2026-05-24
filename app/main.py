@@ -18,7 +18,14 @@ from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from app.gemini import translate_text
-from app.preview import extract_first_url, extract_preview_url, extract_twitter_status_url, fetch_preview_text
+from app.preview import (
+    extract_first_url,
+    extract_preview_url,
+    extract_twitter_status_url,
+    fetch_preview_text,
+    fetch_youtube_preview_text,
+    is_youtube_url,
+)
 from app.settings import get_settings
 
 
@@ -83,7 +90,14 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
         await context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.TYPING)
 
         try:
-            preview_text = await fetch_preview_text(preview_url, settings.REQUEST_TIMEOUT_SECONDS)
+            if is_youtube_url(preview_url):
+                try:
+                    preview_text = await fetch_youtube_preview_text(preview_url, settings.REQUEST_TIMEOUT_SECONDS)
+                except Exception:
+                    logger.exception("Failed to fetch YouTube metadata; falling back to generic preview")
+                    preview_text = await fetch_preview_text(preview_url, settings.REQUEST_TIMEOUT_SECONDS)
+            else:
+                preview_text = await fetch_preview_text(preview_url, settings.REQUEST_TIMEOUT_SECONDS)
         except Exception:
             logger.exception("Failed to fetch preview text")
             await reply_long_text(message, "Could not fetch text from the replied preview message.")
