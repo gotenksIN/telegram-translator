@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from google.genai import Client, types
+from pydantic import BaseModel, Field
 
 from app.settings import Settings
 
 
 _client: Client | None = None
+
+
+class TranslationResponse(BaseModel):
+    translated_text: str = Field(description="The translated text.")
+    source_language: str = Field(
+        description="The full, capitalized English name of the original language of the text (e.g., 'Chinese', 'Japanese', 'Spanish', 'English'). If the text is already in the target language, still identify its language correctly."
+    )
 
 
 def get_client(settings: Settings) -> Client:
@@ -21,7 +29,7 @@ def get_client(settings: Settings) -> Client:
     return _client
 
 
-async def translate_text(text: str, settings: Settings, *, source_type: str = "tweet") -> str:
+async def translate_text(text: str, settings: Settings, *, source_type: str = "tweet") -> dict[str, str]:
     client = get_client(settings)
     source_label = "message" if source_type == "message" else "Twitter/X post" if source_type == "tweet" else "web page preview"
     prompt = f"""
@@ -40,10 +48,18 @@ Text:
     response = await client.aio.models.generate_content(
         model=settings.GEMINI_MODEL,
         contents=prompt,
-        config=types.GenerateContentConfig(temperature=0.0),
+        config=types.GenerateContentConfig(
+            temperature=0.0,
+            response_mime_type="application/json",
+            response_schema=TranslationResponse,
+        ),
     )
 
-    if not response.text:
-        raise ValueError("No text response from Gemini")
+    parsed: TranslationResponse | None = response.parsed
+    if not parsed:
+        raise ValueError("No valid parsed JSON response from Gemini")
 
-    return response.text.strip()
+    return {
+        "translated_text": parsed.translated_text.strip(),
+        "source_language": parsed.source_language.strip(),
+    }

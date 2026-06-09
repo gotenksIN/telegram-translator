@@ -108,7 +108,9 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
             return
 
         try:
-            translation = await translate_text(preview_text, settings, source_type=source_type)
+            result = await translate_text(preview_text, settings, source_type=source_type)
+            translation = result["translated_text"]
+            source_language = result["source_language"]
         except Exception:
             logger.exception("Failed to translate preview")
             await reply_long_text(message, "Could not translate this preview.")
@@ -116,7 +118,11 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
     finally:
         semaphore.release()
 
-    source_line = f"Translation for {source_url}:" if source_url else "Translation for replied preview:"
+    source_line = (
+        f"Translation from {source_language} for {source_url}:"
+        if source_url
+        else f"Translation from {source_language} for replied preview:"
+    )
     await reply_long_text(message, f"{source_line}\n\n{translation}", preview_url=preview_url)
 
 
@@ -160,7 +166,9 @@ async def translate_message_command(update: Update, context: ContextTypes.DEFAUL
         await context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.TYPING)
 
         try:
-            translation = await translate_text(source_text, settings, source_type="message")
+            result = await translate_text(source_text, settings, source_type="message")
+            translation = result["translated_text"]
+            source_language = result["source_language"]
         except Exception:
             logger.exception("Failed to translate message")
             await reply_long_text(message, "Could not translate this message.")
@@ -168,7 +176,7 @@ async def translate_message_command(update: Update, context: ContextTypes.DEFAUL
     finally:
         semaphore.release()
 
-    await reply_long_text(message, f"Translation:\n\n{translation}")
+    await reply_long_text(message, f"Translation from {source_language}:\n\n{translation}")
 
 
 async def configure_bot_commands(application: Application) -> None:
