@@ -226,13 +226,17 @@ def split_telegram_message(text: str) -> list[str]:
 
 def main() -> None:
     settings = get_settings()
-    application = (
+    builder = (
         Application.builder()
         .token(settings.TELEGRAM_BOT_TOKEN)
         .concurrent_updates(MAX_CONCURRENT_UPDATES)
         .post_init(configure_bot_commands)
-        .build()
     )
+    if settings.TELEGRAM_API_BASE_URL:
+        base_api_root = settings.TELEGRAM_API_BASE_URL.rstrip("/")
+        builder.base_url(f"{base_api_root}/bot")
+        builder.base_file_url(f"{base_api_root}/file/bot")
+    application = builder.build()
     application.bot_data["settings"] = settings
     application.bot_data[TRANSLATION_SEMAPHORE_KEY] = BoundedSemaphore(MAX_RUNNING_TRANSLATIONS)
     application.bot_data[TRANSLATION_TIMESTAMPS_KEY] = deque()

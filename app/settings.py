@@ -17,6 +17,7 @@ def _required_env(name: str) -> str:
 @dataclass(frozen=True)
 class Settings:
     TELEGRAM_BOT_TOKEN: str
+    TELEGRAM_API_BASE_URL: str | None
     GEMINI_API_KEY: str
     GEMINI_API_BASE: str | None
     GEMINI_MODEL: str
@@ -28,6 +29,7 @@ class Settings:
 def get_settings() -> Settings:
     return Settings(
         TELEGRAM_BOT_TOKEN=_required_env("TELEGRAM_BOT_TOKEN"),
+        TELEGRAM_API_BASE_URL=os.environ.get("TELEGRAM_API_BASE_URL") or None,
         GEMINI_API_KEY=_required_env("GEMINI_API_KEY"),
         GEMINI_API_BASE=os.environ.get("GEMINI_API_BASE") or None,
         GEMINI_MODEL=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
