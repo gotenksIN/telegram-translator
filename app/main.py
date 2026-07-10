@@ -198,7 +198,8 @@ def reserve_translation_rate_slot(bot_data: dict, now: float) -> int | None:
 
 
 async def reply_long_text(message: Message, text: str, preview_url: str | None = None) -> None:
-    for index, chunk in enumerate(split_telegram_message(text)):
+    chunks = split_telegram_message(text) or ["No text to send."]
+    for index, chunk in enumerate(chunks):
         link_preview_options = None
         if index == 0 and preview_url is not None:
             link_preview_options = LinkPreviewOptions(url=preview_url, prefer_large_media=True, show_above_text=False)
@@ -207,7 +208,8 @@ async def reply_long_text(message: Message, text: str, preview_url: str | None =
 
 def split_telegram_message(text: str) -> list[str]:
     if len(text) <= TELEGRAM_MESSAGE_LIMIT:
-        return [text]
+        text = text.strip()
+        return [text] if text else []
 
     chunks: list[str] = []
     remaining = text
@@ -215,9 +217,12 @@ def split_telegram_message(text: str) -> list[str]:
         split_at = remaining.rfind("\n", 0, TELEGRAM_MESSAGE_LIMIT + 1)
         if split_at <= 0:
             split_at = TELEGRAM_MESSAGE_LIMIT
-        chunks.append(remaining[:split_at].rstrip())
+        chunk = remaining[:split_at].rstrip()
+        if chunk:
+            chunks.append(chunk)
         remaining = remaining[split_at:].lstrip()
 
+    remaining = remaining.strip()
     if remaining:
         chunks.append(remaining)
 
