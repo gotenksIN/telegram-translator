@@ -64,7 +64,7 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
         await message.reply_text("The message has already been translated", do_quote=True)
         return
 
-    preview_url = extract_preview_url(replied_message)
+    preview_url = extract_preview_url(replied_message, settings.TWITTER_PREVIEW_HOST)
     source_url = extract_twitter_status_url(replied_message)
     source_type = "tweet"
     if preview_url is None:

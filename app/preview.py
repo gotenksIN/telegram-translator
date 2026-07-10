@@ -17,7 +17,7 @@ BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 TRAILING_URL_PUNCTUATION = ".,;!?)]}。．、，；：！？）］｝】」』》〉"
 TWITTER_HOSTS = {"twitter.com", "mobile.twitter.com", "x.com", "mobile.x.com"}
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
-PREVIEW_HOST = "hitlerx.com"
+DEFAULT_TWITTER_PREVIEW_HOST = "hitlerx.com"
 MAX_PREVIEW_REDIRECTS = 5
 
 
@@ -35,11 +35,11 @@ class _YtDlpLogger:
         pass
 
 
-def extract_preview_url(message: Message) -> str | None:
+def extract_preview_url(message: Message, preview_host: str = DEFAULT_TWITTER_PREVIEW_HOST) -> str | None:
     source_url = extract_twitter_status_url(message)
     if source_url is None:
         return None
-    return twitter_url_to_preview_url(source_url)
+    return twitter_url_to_preview_url(source_url, preview_host)
 
 
 def extract_twitter_status_url(message: Message) -> str | None:
@@ -70,11 +70,11 @@ def is_youtube_url(url: str) -> bool:
     return host in YOUTUBE_HOSTS
 
 
-def twitter_url_to_preview_url(url: str) -> str | None:
+def twitter_url_to_preview_url(url: str, preview_host: str = DEFAULT_TWITTER_PREVIEW_HOST) -> str | None:
     parsed = urlparse(url)
     if not is_supported_twitter_url(parsed):
         return None
-    return urlunparse(("https", PREVIEW_HOST, parsed.path.rstrip("/"), "", "", ""))
+    return urlunparse(("https", preview_host, parsed.path.rstrip("/"), "", "", ""))
 
 
 def is_supported_twitter_url(parsed_url: ParseResult) -> bool:

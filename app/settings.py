@@ -38,6 +38,14 @@ def _optional_http_url_env(name: str) -> str | None:
     return value.rstrip("/")
 
 
+def _host_env(name: str, default: str) -> str:
+    value = _env_with_default(name, default)
+    parsed = urlparse(f"//{value}")
+    if parsed.netloc != value or not parsed.hostname:
+        raise RuntimeError(f"Environment variable must be a host name without a scheme or path: {name}")
+    return value
+
+
 def _positive_float_env(name: str, default: str) -> float:
     value = os.environ.get(name, default).strip()
     try:
@@ -59,6 +67,7 @@ class Settings:
     GEMINI_MODEL: str
     TARGET_LANGUAGE: str
     REQUEST_TIMEOUT_SECONDS: float
+    TWITTER_PREVIEW_HOST: str
     YOUTUBE_COOKIES_PATH: str | None
 
 
@@ -71,5 +80,6 @@ def get_settings() -> Settings:
         GEMINI_MODEL=_env_with_default("GEMINI_MODEL", "gemini-3.5-flash"),
         TARGET_LANGUAGE=_env_with_default("TARGET_LANGUAGE", "English"),
         REQUEST_TIMEOUT_SECONDS=_positive_float_env("REQUEST_TIMEOUT_SECONDS", "10"),
+        TWITTER_PREVIEW_HOST=_host_env("TWITTER_PREVIEW_HOST", "hitlerx.com"),
         YOUTUBE_COOKIES_PATH=_optional_env("YOUTUBE_COOKIES_PATH"),
     )

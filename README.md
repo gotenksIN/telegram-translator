@@ -12,7 +12,7 @@ The bot provides two commands:
 /translate_preview@BotUserName
 ```
 
-For Twitter/X status URLs, the bot rewrites the link to `hitlerx.com`, fetches that preview page, and replies with the translation. For YouTube links, it uses `yt-dlp` metadata so the title, description, and tags are translated instead of YouTube's generic page description. Other URLs fall back to OpenGraph/meta preview extraction.
+For Twitter/X status URLs, the bot rewrites the link to the configured preview host, fetches that preview page, and replies with the translation. For YouTube links, it uses `yt-dlp` metadata so the title, description, and tags are translated instead of YouTube's generic page description. Other URLs fall back to OpenGraph/meta preview extraction.
 
 **`/translate_message`** — Translate the text of any replied message directly:
 
@@ -61,6 +61,7 @@ Optional preview/translation settings:
 ```env
 TARGET_LANGUAGE=English
 REQUEST_TIMEOUT_SECONDS=10
+TWITTER_PREVIEW_HOST=hitlerx.com
 ```
 
 ## Run
