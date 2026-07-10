@@ -53,8 +53,10 @@ Optional Gemini proxy support matches the existing `GEMINI_API_BASE` convention:
 
 ```env
 GEMINI_API_BASE=https://your-proxy.example/gemini
-GEMINI_MODEL=gemini-3.1-pro-preview
+GEMINI_MODEL=gemini-3.5-flash
 ```
+
+`gemini-3.5-flash` is the default. In local tests for this bot, it produced better translations than the preview Pro model.
 
 Optional preview/translation settings:
 
