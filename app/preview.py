@@ -4,7 +4,7 @@ import html
 import ipaddress
 import re
 import socket
-from asyncio import to_thread
+from asyncio import to_thread, wait_for
 from urllib.parse import ParseResult, urljoin, urlparse, urlunparse
 
 import httpx
@@ -151,7 +151,7 @@ def _resolve_host_addresses(hostname: str, port: int | None) -> set[ipaddress.IP
 
 
 async def fetch_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None = None) -> str:
-    return await to_thread(_extract_youtube_preview_text, url, timeout_seconds, cookies_path)
+    return await wait_for(to_thread(_extract_youtube_preview_text, url, timeout_seconds, cookies_path), timeout_seconds)
 
 
 def _extract_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None) -> str:

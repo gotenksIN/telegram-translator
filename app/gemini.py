@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from asyncio import wait_for
+
 from google.genai import Client, types
 from pydantic import BaseModel, Field
 
@@ -45,14 +47,17 @@ Text:
 {text}
 """.strip()
 
-    response = await client.aio.models.generate_content(
-        model=settings.GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.0,
-            response_mime_type="application/json",
-            response_schema=TranslationResponse,
+    response = await wait_for(
+        client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                response_mime_type="application/json",
+                response_schema=TranslationResponse,
+            ),
         ),
+        settings.REQUEST_TIMEOUT_SECONDS,
     )
 
     parsed: TranslationResponse | None = response.parsed
