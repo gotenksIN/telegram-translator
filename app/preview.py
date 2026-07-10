@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import html
+import ipaddress
 import re
+import socket
 from asyncio import to_thread
-from urllib.parse import ParseResult, urlparse, urlunparse
+from urllib.parse import ParseResult, urljoin, urlparse, urlunparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -16,6 +18,7 @@ TRAILING_URL_PUNCTUATION = ".,;!?)]}。．、，；：！？）］｝】」』�
 TWITTER_HOSTS = {"twitter.com", "mobile.twitter.com", "x.com", "mobile.x.com"}
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
 PREVIEW_HOST = "hitlerx.com"
+MAX_PREVIEW_REDIRECTS = 5
 
 
 class _YtDlpLogger:
@@ -93,10 +96,10 @@ def is_supported_twitter_url(parsed_url: ParseResult) -> bool:
 async def fetch_preview_text(url: str, timeout_seconds: float) -> str:
     async with httpx.AsyncClient(
         timeout=timeout_seconds,
-        follow_redirects=True,
+        follow_redirects=False,
         headers={"User-Agent": "TelegramTranslateBot/0.1"},
     ) as client:
-        response = await client.get(url)
+        response = await _get_validated_preview_response(client, url)
         response.raise_for_status()
 
     text = extract_preview_text(response.text)
@@ -104,6 +107,47 @@ async def fetch_preview_text(url: str, timeout_seconds: float) -> str:
         raise ValueError("Could not extract text from preview metadata")
 
     return text
+
+
+async def _get_validated_preview_response(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    next_url = url
+    for _ in range(MAX_PREVIEW_REDIRECTS + 1):
+        await validate_public_http_url(next_url)
+        response = await client.get(next_url)
+        if not response.is_redirect:
+            return response
+
+        location = response.headers.get("location")
+        if not location:
+            return response
+        next_url = urljoin(str(response.url), location)
+
+    raise ValueError("Too many preview redirects")
+
+
+async def validate_public_http_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Preview URL must use http or https")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Preview URL must include a hostname")
+
+    try:
+        addresses = await to_thread(_resolve_host_addresses, hostname, parsed.port)
+    except OSError as exc:
+        raise ValueError("Could not resolve preview URL host") from exc
+
+    if not addresses:
+        raise ValueError("Could not resolve preview URL host")
+    if any(not address.is_global for address in addresses):
+        raise ValueError("Preview URL resolves to a non-public address")
+
+
+def _resolve_host_addresses(hostname: str, port: int | None) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    results = socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM)
+    return {ipaddress.ip_address(result[4][0]) for result in results}
 
 
 async def fetch_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None = None) -> str:
