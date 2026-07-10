@@ -20,9 +20,13 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1",
     "ruff>=0.14.0",
 ]
 
 [tool.ruff]
 line-length = 120
 exclude = ["__init__.py", ".venv"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
