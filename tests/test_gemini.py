@@ -1,43 +1,69 @@
-from dataclasses import replace
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 import app.gemini as gemini
 from app.gemini import TranslationResponse
-from app.settings import get_settings
 
 
-@pytest.mark.anyio
-async def test_translate_text_configures_thinking_level(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "telegram-token")
-    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
-    settings = replace(get_settings(), GEMINI_THINKING_LEVEL="low")
+@pytest.fixture(autouse=True)
+def reset_client(monkeypatch):
+    monkeypatch.setattr(gemini, "_client", None)
+
+
+def test_get_client_builds_and_caches_default_client(monkeypatch, settings):
+    client = object()
+    constructor = Mock(return_value=client)
+    monkeypatch.setattr(gemini, "Client", constructor)
+
+    assert gemini.get_client(settings) is client
+    assert gemini.get_client(settings) is client
+    constructor.assert_called_once_with(api_key="key")
+
+
+def test_get_client_configures_custom_base_url(monkeypatch, settings):
+    settings = settings.__class__(**{**settings.__dict__, "GEMINI_API_BASE": "https://proxy.example"})
+    constructor = Mock(return_value=object())
+    monkeypatch.setattr(gemini, "Client", constructor)
+
+    gemini.get_client(settings)
+
+    assert constructor.call_args.kwargs["api_key"] == "key"
+    assert constructor.call_args.kwargs["http_options"].base_url == "https://proxy.example"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("source_type", "source_label"),
+    [("message", "message"), ("tweet", "Twitter/X post"), ("preview", "web page preview")],
+)
+async def test_translate_text_builds_request_and_returns_trimmed_result(monkeypatch, settings, source_type, source_label):
     generate_content = AsyncMock(
-        return_value=SimpleNamespace(parsed=TranslationResponse(translated_text="Hello", source_language="Korean"))
+        return_value=SimpleNamespace(
+            parsed=TranslationResponse(translated_text=" translated ", source_language=" Japanese ")
+        )
     )
     client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)))
-    monkeypatch.setattr(gemini, "get_client", lambda _: client)
+    monkeypatch.setattr(gemini, "get_client", Mock(return_value=client))
 
-    await gemini.translate_text("안녕하세요", settings)
+    result = await gemini.translate_text("original", settings, source_type=source_type)
 
-    config = generate_content.await_args.kwargs["config"]
-    assert config.thinking_config.thinking_level.value == "LOW"
-    assert config.thinking_config.thinking_budget is None
+    assert result == {"translated_text": "translated", "source_language": "Japanese"}
+    kwargs = generate_content.call_args.kwargs
+    assert kwargs["model"] == "model"
+    assert f"Translate this {source_label} into English." in kwargs["contents"]
+    assert kwargs["contents"].endswith("Text:\noriginal")
+    assert kwargs["config"].temperature == 0.0
+    assert kwargs["config"].response_schema is TranslationResponse
+    assert kwargs["config"].thinking_config.thinking_level == "LOW"
 
 
-@pytest.mark.anyio
-async def test_translate_text_omits_thinking_config_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "telegram-token")
-    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
-    settings = replace(get_settings(), GEMINI_THINKING_LEVEL=None)
-    generate_content = AsyncMock(
-        return_value=SimpleNamespace(parsed=TranslationResponse(translated_text="Hello", source_language="Korean"))
-    )
+@pytest.mark.asyncio
+async def test_translate_text_rejects_missing_parsed_response(monkeypatch, settings):
+    generate_content = AsyncMock(return_value=SimpleNamespace(parsed=None))
     client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)))
-    monkeypatch.setattr(gemini, "get_client", lambda _: client)
+    monkeypatch.setattr(gemini, "get_client", Mock(return_value=client))
 
-    await gemini.translate_text("안녕하세요", settings)
-
-    assert generate_content.await_args.kwargs["config"].thinking_config is None
+    with pytest.raises(ValueError, match="No valid parsed JSON response"):
+        await gemini.translate_text("original", settings)
