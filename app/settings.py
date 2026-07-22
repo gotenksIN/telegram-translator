@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+THINKING_LEVELS = ("minimal", "low", "medium", "high")
+
 
 def _required_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
@@ -18,6 +20,16 @@ def _required_env(name: str) -> str:
 
 def _optional_env(name: str) -> str | None:
     return os.environ.get(name, "").strip() or None
+
+
+def _optional_choice_env(name: str, choices: tuple[str, ...]) -> str | None:
+    value = _optional_env(name)
+    if value is None:
+        return None
+    value = value.lower()
+    if value not in choices:
+        raise RuntimeError(f"Environment variable must be one of {', '.join(choices)}: {name}")
+    return value
 
 
 def _env_with_default(name: str, default: str) -> str:
@@ -65,6 +77,7 @@ class Settings:
     GEMINI_API_KEY: str
     GEMINI_API_BASE: str | None
     GEMINI_MODEL: str
+    GEMINI_THINKING_LEVEL: str | None
     TARGET_LANGUAGE: str
     REQUEST_TIMEOUT_SECONDS: float
     TWITTER_PREVIEW_HOST: str
@@ -78,6 +91,7 @@ def get_settings() -> Settings:
         GEMINI_API_KEY=_required_env("GEMINI_API_KEY"),
         GEMINI_API_BASE=_optional_http_url_env("GEMINI_API_BASE"),
         GEMINI_MODEL=_env_with_default("GEMINI_MODEL", "gemini-3.5-flash"),
+        GEMINI_THINKING_LEVEL=_optional_choice_env("GEMINI_THINKING_LEVEL", THINKING_LEVELS),
         TARGET_LANGUAGE=_env_with_default("TARGET_LANGUAGE", "English"),
         REQUEST_TIMEOUT_SECONDS=_positive_float_env("REQUEST_TIMEOUT_SECONDS", "10"),
         TWITTER_PREVIEW_HOST=_host_env("TWITTER_PREVIEW_HOST", "hitlerx.com"),

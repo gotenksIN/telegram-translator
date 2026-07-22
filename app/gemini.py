@@ -47,15 +47,21 @@ Text:
 {text}
 """.strip()
 
+    config_kwargs = {
+        "temperature": 0.0,
+        "response_mime_type": "application/json",
+        "response_schema": TranslationResponse,
+    }
+    if settings.GEMINI_THINKING_LEVEL is not None:
+        config_kwargs["thinking_config"] = types.ThinkingConfig(
+            thinking_level=settings.GEMINI_THINKING_LEVEL.upper()
+        )
+
     response = await wait_for(
         client.aio.models.generate_content(
             model=settings.GEMINI_MODEL,
             contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                response_mime_type="application/json",
-                response_schema=TranslationResponse,
-            ),
+            config=types.GenerateContentConfig(**config_kwargs),
         ),
         settings.REQUEST_TIMEOUT_SECONDS,
     )
