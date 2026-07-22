@@ -22,11 +22,8 @@ def _optional_env(name: str) -> str | None:
     return os.environ.get(name, "").strip() or None
 
 
-def _optional_choice_env(name: str, choices: tuple[str, ...]) -> str | None:
-    value = _optional_env(name)
-    if value is None:
-        return None
-    value = value.lower()
+def _choice_env(name: str, choices: tuple[str, ...], default: str) -> str:
+    value = os.environ.get(name, default).strip().lower()
     if value not in choices:
         raise RuntimeError(f"Environment variable must be one of {', '.join(choices)}: {name}")
     return value
@@ -77,7 +74,7 @@ class Settings:
     GEMINI_API_KEY: str
     GEMINI_API_BASE: str | None
     GEMINI_MODEL: str
-    GEMINI_THINKING_LEVEL: str | None
+    GEMINI_THINKING_LEVEL: str
     TARGET_LANGUAGE: str
     REQUEST_TIMEOUT_SECONDS: float
     TWITTER_PREVIEW_HOST: str
@@ -90,8 +87,8 @@ def get_settings() -> Settings:
         TELEGRAM_API_BASE_URL=_optional_http_url_env("TELEGRAM_API_BASE_URL"),
         GEMINI_API_KEY=_required_env("GEMINI_API_KEY"),
         GEMINI_API_BASE=_optional_http_url_env("GEMINI_API_BASE"),
-        GEMINI_MODEL=_env_with_default("GEMINI_MODEL", "gemini-3.5-flash"),
-        GEMINI_THINKING_LEVEL=_optional_choice_env("GEMINI_THINKING_LEVEL", THINKING_LEVELS),
+        GEMINI_MODEL=_env_with_default("GEMINI_MODEL", "gemini-3.6-flash"),
+        GEMINI_THINKING_LEVEL=_choice_env("GEMINI_THINKING_LEVEL", THINKING_LEVELS, "low"),
         TARGET_LANGUAGE=_env_with_default("TARGET_LANGUAGE", "English"),
         REQUEST_TIMEOUT_SECONDS=_positive_float_env("REQUEST_TIMEOUT_SECONDS", "10"),
         TWITTER_PREVIEW_HOST=_host_env("TWITTER_PREVIEW_HOST", "hitlerx.com"),

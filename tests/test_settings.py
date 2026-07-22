@@ -29,8 +29,8 @@ def test_get_settings_uses_valid_defaults(monkeypatch: pytest.MonkeyPatch) -> No
 
     settings = get_settings()
 
-    assert settings.GEMINI_MODEL == "gemini-3.5-flash"
-    assert settings.GEMINI_THINKING_LEVEL is None
+    assert settings.GEMINI_MODEL == "gemini-3.6-flash"
+    assert settings.GEMINI_THINKING_LEVEL == "low"
     assert settings.TARGET_LANGUAGE == "English"
     assert settings.REQUEST_TIMEOUT_SECONDS == 10
     assert settings.TWITTER_PREVIEW_HOST == "hitlerx.com"
