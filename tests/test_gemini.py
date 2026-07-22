@@ -53,6 +53,8 @@ async def test_translate_text_builds_request_and_returns_trimmed_result(monkeypa
     kwargs = generate_content.call_args.kwargs
     assert kwargs["model"] == "model"
     assert f"Translate this {source_label} into English." in kwargs["contents"]
+    assert "Handle wordplay in any language" in kwargs["contents"]
+    assert "Label it \"Translator's note:\"" in kwargs["contents"]
     assert kwargs["contents"].endswith("Text:\noriginal")
     assert kwargs["config"].temperature == 0.0
     assert kwargs["config"].response_schema is TranslationResponse

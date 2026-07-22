@@ -39,8 +39,9 @@ Translate this {source_label} into {settings.TARGET_LANGUAGE}.
 
 Rules:
 - Preserve handles, hashtags, names, URLs, emojis, and line breaks.
-- Preserve slang naturally where possible.
-- Do not add commentary, notes, labels, or explanations.
+- Produce a concise, natural translation that preserves the original meaning, tone, humor, slang, and rhetorical effect; do not translate so literally that these are lost.
+- Handle wordplay in any language by recreating it naturally in the target language when possible.
+- Whenever the text contains wordplay, a pun, or cultural or linguistic context that is not obvious from the translation alone, append one brief translator's note in {settings.TARGET_LANGUAGE}. Explain only what is needed to understand the original text. Label it "Translator's note:" and place it after the translated text. Do not add any other commentary.
 - If the text is already in {settings.TARGET_LANGUAGE}, return it unchanged.
 
 Text:
