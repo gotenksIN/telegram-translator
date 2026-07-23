@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import ipaddress
+import json
 import re
 import socket
 from asyncio import to_thread, wait_for
@@ -17,6 +18,7 @@ BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 TRAILING_URL_PUNCTUATION = ".,;!?)]}。．、，；：！？）］｝】」』》〉"
 TWITTER_HOSTS = {"twitter.com", "mobile.twitter.com", "x.com", "mobile.x.com"}
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
+YOUTUBE_POST_PATH_RE = re.compile(r"^/post/[^/]+/?$")
 DEFAULT_TWITTER_PREVIEW_HOST = "hitlerx.com"
 MAX_PREVIEW_REDIRECTS = 5
 
@@ -151,7 +153,48 @@ def _resolve_host_addresses(hostname: str, port: int | None) -> set[ipaddress.IP
 
 
 async def fetch_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None = None) -> str:
+    if is_youtube_post_url(url):
+        return await fetch_youtube_post_text(url, timeout_seconds)
     return await wait_for(to_thread(_extract_youtube_preview_text, url, timeout_seconds, cookies_path), timeout_seconds)
+
+
+def is_youtube_post_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return is_youtube_url(url) and YOUTUBE_POST_PATH_RE.fullmatch(parsed.path) is not None
+
+
+async def fetch_youtube_post_text(url: str, timeout_seconds: float) -> str:
+    async with httpx.AsyncClient(
+        timeout=timeout_seconds,
+        follow_redirects=False,
+        headers={"User-Agent": "Mozilla/5.0"},
+    ) as client:
+        response = await _get_validated_preview_response(client, url)
+        response.raise_for_status()
+
+    text = extract_youtube_post_text(response.text)
+    if not text:
+        raise ValueError("Could not extract YouTube post text")
+    return text
+
+
+def extract_youtube_post_text(page_html: str) -> str | None:
+    soup = BeautifulSoup(page_html, "html.parser")
+    for script in soup.find_all("script"):
+        content = script.string
+        if not content or '"discussionForumPosting"' not in content:
+            continue
+        match = re.search(r'"discussionForumPosting":\s*', content)
+        if not match:
+            continue
+        try:
+            post, _ = json.JSONDecoder().raw_decode(content, match.end())
+        except (json.JSONDecodeError, TypeError):
+            continue
+        text = post.get("text") if isinstance(post, dict) else None
+        if isinstance(text, str):
+            return _clean_preview_text(text) or None
+    return None
 
 
 def _extract_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None) -> str:

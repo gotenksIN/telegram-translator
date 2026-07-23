@@ -74,6 +74,34 @@ def test_is_youtube_url(url, expected):
 
 
 @pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://youtube.com/post/Ugkx123", True),
+        ("https://www.youtube.com/post/Ugkx123/", True),
+        ("https://youtube.com/watch?v=1", False),
+        ("https://example.com/post/Ugkx123", False),
+    ],
+)
+def test_is_youtube_post_url(url, expected):
+    assert preview.is_youtube_post_url(url) is expected
+
+
+def test_extract_youtube_post_text_uses_structured_full_text():
+    page_html = """
+    <script>
+    var data = {"postDetails":{"discussionForumPosting":{"type":"DiscussionForumPosting",
+    "text":"Full &amp; untruncated\\npost","image":["image"]}}}};
+    </script>
+    """
+    assert preview.extract_youtube_post_text(page_html) == "Full & untruncated\npost"
+
+
+def test_extract_youtube_post_text_rejects_missing_or_malformed_data():
+    assert preview.extract_youtube_post_text("<script>{}</script>") is None
+    assert preview.extract_youtube_post_text('<script>{"discussionForumPosting": nope}}};</script>') is None
+
+
+@pytest.mark.parametrize(
     ("page_html", "expected"),
     [
         ('<meta property="og:description" content=" A &amp; B &lt;br&gt; C ">', "A & B\nC"),
@@ -194,6 +222,14 @@ async def test_fetch_preview_text_rejects_missing_metadata(monkeypatch):
     monkeypatch.setattr(preview, "_get_validated_preview_response", AsyncMock(return_value=response))
     with pytest.raises(ValueError, match="Could not extract text"):
         await preview.fetch_preview_text("https://example.com", 3)
+
+
+@pytest.mark.asyncio
+async def test_fetch_youtube_preview_text_uses_post_page(monkeypatch):
+    fetch_post = AsyncMock(return_value="complete post")
+    monkeypatch.setattr(preview, "fetch_youtube_post_text", fetch_post)
+    assert await preview.fetch_youtube_preview_text("https://youtube.com/post/Ugkx123", 3, "cookies.txt") == "complete post"
+    fetch_post.assert_awaited_once_with("https://youtube.com/post/Ugkx123", 3)
 
 
 def test_extract_youtube_preview_text_uses_first_playlist_entry(monkeypatch):
