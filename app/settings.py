@@ -87,7 +87,7 @@ def get_settings() -> Settings:
         TELEGRAM_API_BASE_URL=_optional_http_url_env("TELEGRAM_API_BASE_URL"),
         GEMINI_API_KEY=_required_env("GEMINI_API_KEY"),
         GEMINI_API_BASE=_optional_http_url_env("GEMINI_API_BASE"),
-        GEMINI_MODEL=_env_with_default("GEMINI_MODEL", "gemini-3.6-flash"),
+        GEMINI_MODEL=_env_with_default("GEMINI_MODEL", "gemini-3.7-flash"),
         GEMINI_THINKING_LEVEL=_choice_env("GEMINI_THINKING_LEVEL", THINKING_LEVELS, "low"),
         TARGET_LANGUAGE=_env_with_default("TARGET_LANGUAGE", "English"),
         REQUEST_TIMEOUT_SECONDS=_positive_float_env("REQUEST_TIMEOUT_SECONDS", "10"),

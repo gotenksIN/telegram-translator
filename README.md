@@ -53,11 +53,11 @@ Optional Gemini proxy support matches the existing `GEMINI_API_BASE` convention:
 
 ```env
 GEMINI_API_BASE=https://your-proxy.example/gemini
-GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MODEL=gemini-3.7-flash
 GEMINI_THINKING_LEVEL=low
 ```
 
-`gemini-3.6-flash` with `low` thinking is the default. In local tests for this bot, it provided the best speed-to-quality balance.
+`gemini-3.7-flash` with `low` thinking is the default.
 `GEMINI_THINKING_LEVEL` accepts `minimal`, `low`, `medium`, or `high`.
 
 Optional preview/translation settings:

@@ -31,7 +31,7 @@ def test_get_settings_loads_required_values_and_defaults(monkeypatch):
 
     assert settings.TELEGRAM_BOT_TOKEN == "token"
     assert settings.GEMINI_API_KEY == "key"
-    assert settings.GEMINI_MODEL == "gemini-3.6-flash"
+    assert settings.GEMINI_MODEL == "gemini-3.7-flash"
     assert settings.GEMINI_THINKING_LEVEL == "low"
     assert settings.TARGET_LANGUAGE == "English"
     assert settings.REQUEST_TIMEOUT_SECONDS == 10.0
