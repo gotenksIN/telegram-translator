@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from app.settings import Settings
 
-
 _client: Client | None = None
 
 
@@ -31,9 +30,26 @@ def get_client(settings: Settings) -> Client:
     return _client
 
 
+def build_content_config(settings: Settings) -> types.GenerateContentConfig:
+    thinking_config = (
+        types.ThinkingConfig(thinking_level=settings.GEMINI_THINKING_LEVEL.upper())
+        if settings.GEMINI_THINKING_LEVEL is not None
+        else None
+    )
+    return types.GenerateContentConfig(
+        temperature=0.0,
+        response_mime_type="application/json",
+        response_schema=TranslationResponse,
+        thinking_config=thinking_config,
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+    )
+
+
 async def translate_text(text: str, settings: Settings, *, source_type: str = "tweet") -> dict[str, str]:
     client = get_client(settings)
-    source_label = "message" if source_type == "message" else "Twitter/X post" if source_type == "tweet" else "web page preview"
+    source_label = (
+        "message" if source_type == "message" else "Twitter/X post" if source_type == "tweet" else "web page preview"
+    )
     prompt = f"""
 Translate this {source_label} into {settings.TARGET_LANGUAGE}.
 
@@ -48,21 +64,11 @@ Text:
 {text}
 """.strip()
 
-    config_kwargs = {
-        "temperature": 0.0,
-        "response_mime_type": "application/json",
-        "response_schema": TranslationResponse,
-    }
-    if settings.GEMINI_THINKING_LEVEL is not None:
-        config_kwargs["thinking_config"] = types.ThinkingConfig(
-            thinking_level=settings.GEMINI_THINKING_LEVEL.upper()
-        )
-
     response = await wait_for(
         client.aio.models.generate_content(
             model=settings.GEMINI_MODEL,
             contents=prompt,
-            config=types.GenerateContentConfig(**config_kwargs),
+            config=build_content_config(settings),
         ),
         settings.REQUEST_TIMEOUT_SECONDS,
     )
