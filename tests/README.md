@@ -10,7 +10,7 @@ Each test file imports behavior directly from its owning module.
 | `tests/test_settings.py` | `app/settings.py` | Environment variable validation, default values, type parsing, URL checks, and invalid configuration rejection. |
 | `tests/test_preview.py` | `app/preview.py` | URL extraction, Twitter URL rewriting, SSRF IP validation, redirect loop protection, YouTube post scraping, `yt-dlp` metadata extraction, and HTML preview parsing. |
 | `tests/test_gemini.py` | `app/gemini.py` | Gemini client configuration, prompt synthesis across source types, structured `TranslationResponse` validation, thinking configuration, and API timeouts. |
-| `tests/test_main.py` | `app/main.py` | Telegram command handling, reply checks, concurrency semaphore enforcement, sliding window rate limits, typing indicators, error replies, message chunking, and link preview attachment. |
+| `tests/test_main.py` | `app/main.py` | Telegram command handling, reply checks, concurrency semaphore enforcement, sliding window rate limits, typing indicators, error replies, message length limit enforcement, and link preview attachment. |
 | `tests/conftest.py` | Test infrastructure | Pytest configuration, asyncio event loop setups, and shared test fixtures. |
 
 ## Automated contracts
@@ -20,7 +20,7 @@ Each test file imports behavior directly from its owning module.
 | Settings | Required environment presence, default fallback values, thinking level enum validation, URL scheme and netloc validation, positive float timeouts, and hostname isolation. |
 | Preview | Regex URL matching, trailing punctuation stripping, Twitter host detection and rewrite paths, DNS resolution, non-public IP rejection (loopback, private, link-local, multicast), redirect limits, YouTube community post JSON extraction, `yt-dlp` field mapping, OpenGraph and meta tag fallback hierarchy, and HTML whitespace cleaning. |
 | Gemini | Structured response deserialization, missing response handling, prompt rule preservation across message, tweet, and preview types, thinking level configuration, and timeout enforcement. |
-| Main | Command routing for `/translate_preview` and `/translate_message`, self-reply rejection, missing URL rejection, concurrency exhaustion replies, sliding window rate throttling and retry-after calculation, message splitting at newline boundaries within 4096 characters, and link preview attachment to first chunks only. |
+| Main | Command routing for `/translate_preview` and `/translate_message`, self-reply rejection, missing URL rejection, concurrency exhaustion replies, sliding window rate throttling and retry-after calculation, 4096-character limit enforcement on replied messages and translations, and link preview attachment on preview replies. |
 
 Tests assert returned values, exceptions, message text, and outbound payloads.
 Tests do not assert private helper calls or internal execution order unless ordering changes an observable contract.

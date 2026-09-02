@@ -47,8 +47,9 @@ flowchart TD
     S --> T
     T --> U[Call Gemini API with TranslationResponse schema]
     U --> V[Format reply with source language and attribution]
-    V --> W[Split message into chunks <= 4096 chars]
-    W --> X[Send reply messages with link preview options on first chunk]
+    V --> W{Length > 4096 chars?}
+    W -->|Yes| X[Reply: translation exceeds limit notice]
+    W -->|No| Y[Send reply message with link preview options]
 ```
 
 ### Direct message translation flow (`/translate_message`)
@@ -61,13 +62,17 @@ flowchart TD
     D -->|Yes| E[Reply: already translated]
     D -->|No| F[Extract text or caption]
     F -->|Empty| G[Reply: message has no text]
-    F -->|Text present| H{Check semaphore & rate limit}
-    H -->|Exceeded| I[Reply with rate limit or busy notice]
-    H -->|Allowed| J[Send typing indicator]
-    J --> K[Call Gemini API with TranslationResponse schema]
-    K --> L[Format reply with source language]
-    L --> M[Split message into chunks <= 4096 chars]
-    M --> N[Send reply messages]
+    F -->|Text present| H{Input text > 4096 chars?}
+    H -->|Yes| I[Reply: message exceeds limit notice]
+    H -->|No| J{Check semaphore & rate limit}
+    J -->|Exceeded| K[Reply with rate limit or busy notice]
+    J -->|Allowed| L[Acquire concurrency slot]
+    L --> M[Send typing indicator]
+    M --> N[Call Gemini API with TranslationResponse schema]
+    N --> O[Format reply with source language]
+    O --> P{Length > 4096 chars?}
+    P -->|Yes| Q[Reply: translation exceeds limit notice]
+    P -->|No| R[Send reply message]
 ```
 
 ## Repository layout
@@ -80,12 +85,12 @@ Every tracked file in this repository has a defined responsibility.
 | `app/settings.py` | Environment variable validation and immutable Settings configuration object. |
 | `app/preview.py` | URL extraction, Twitter rewriting, SSRF DNS validation, YouTube metadata fetching, and HTML preview extraction. |
 | `app/gemini.py` | Gemini client management, prompt synthesis, structured Pydantic response models, and API translation requests. |
-| `app/main.py` | Telegram bot application setup, command handlers, rate limiting, concurrency semaphores, message splitting, and polling loop. |
+| `app/main.py` | Telegram bot application setup, command handlers, rate limiting, concurrency semaphores, message length limit enforcement, and polling loop. |
 | `tests/conftest.py` | Pytest fixtures and shared mocks. |
 | `tests/test_settings.py` | Behavioral tests for environment configuration loading and validation. |
 | `tests/test_preview.py` | Behavioral tests for URL handling, preview scraping, and SSRF defenses. |
 | `tests/test_gemini.py` | Behavioral tests for Gemini prompt construction and structured response handling. |
-| `tests/test_main.py` | Behavioral tests for bot commands, rate limits, error paths, and message chunking. |
+| `tests/test_main.py` | Behavioral tests for bot commands, rate limits, error paths, and message length limit enforcement. |
 | `tests/README.md` | Test suite architecture, contract boundaries, and review-only specifications. |
 | `systemd/telegram-translator.service` | User systemd service unit file with sandboxing and resource limits. |
 | `pyproject.toml` | Project metadata, dependency specifications, and tool configurations. |
@@ -160,17 +165,36 @@ The model call configures:
 - `response_schema`: `TranslationResponse`.
 - `thinking_config`: `types.ThinkingConfig(thinking_level=settings.GEMINI_THINKING_LEVEL.upper())`.
 - Automatic function calling disabled explicitly via `build_content_config()` (`automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)`).
+- System instruction configuring translation rules and target language guidelines.
 
-When `response.parsed` is missing or invalid, the client raises `ValueError`.
+When `response.parsed` is missing or invalid, the client logs diagnostic context and raises `ValueError`.
 
 ## Translation pipeline and prompt contract
 
-`translate_text()` builds prompts using source-specific labels:
+### Client initialization
+
+`get_client()` initializes and caches a singleton Google GenAI `Client`.
+It configures native HTTP options using `types.HttpOptions(base_url=settings.GEMINI_API_BASE, timeout=int(settings.REQUEST_TIMEOUT_SECONDS * 1000))`.
+`aclose_client()` cleanly closes the underlying asynchronous client transport with `await _client.aio.aclose()`.
+
+### Request configuration
+
+`build_content_config()` constructs a `types.GenerateContentConfig` instance:
+- `temperature`: `0.0`.
+- `response_mime_type`: `"application/json"`.
+- `response_schema`: `TranslationResponse`.
+- `thinking_config`: `types.ThinkingConfig(thinking_level=settings.GEMINI_THINKING_LEVEL.upper())` when `GEMINI_THINKING_LEVEL` is set.
+- `automatic_function_calling`: `types.AutomaticFunctionCallingConfig(disable=True)`.
+- `system_instruction`: translation instructions embedded directly into the config to guide target language rendering and stylistic rules.
+
+### Translation execution
+
+`translate_text()` builds user contents using source-specific labels:
 - `"message"` labels content as a message.
 - `"tweet"` labels content as a Twitter/X post.
 - `"preview"` labels content as a web page preview.
 
-The prompt enforces these translation rules:
+The `system_instruction` in `build_content_config()` enforces these translation rules:
 1. Preserve handles, hashtags, names, URLs, emojis, and line breaks.
 2. Produce a concise, natural translation that preserves the original meaning, tone, humor, slang, and rhetorical effect.
 3. Avoid overly literal translations that lose rhetorical impact.
@@ -262,11 +286,12 @@ The bot limits resource consumption across all incoming requests:
 The bot observes Telegram platform limits and interaction conventions:
 - **Message length limit:**
   Telegram limits messages to 4096 characters (`TELEGRAM_MESSAGE_LIMIT = 4096`).
-  `split_telegram_message()` splits long translations at the last newline within 4096 characters.
-  It falls back to a hard split only when no newline exists.
+  The bot immediately rejects replied messages exceeding 4096 characters in `/translate_message` with:
+  `"The replied message exceeds the maximum Telegram message limit of 4096 characters."`.
+  `reply_long_text()` immediately rejects translations exceeding 4096 characters with:
+  `"Translation exceeds the maximum Telegram message limit of 4096 characters."`.
 - **Link preview options:**
-  For `/translate_preview`, the first reply chunk includes `LinkPreviewOptions(url=preview_url, prefer_large_media=True, show_above_text=False)`.
-  Subsequent chunks omit link preview options.
+  For `/translate_preview`, the preview translation reply includes `LinkPreviewOptions(url=preview_url, prefer_large_media=True, show_above_text=False)`.
 - **Self-reply guard:**
   When a user replies to a message sent by the bot itself, the bot rejects the request:
   `"The message has already been translated"`.
@@ -274,6 +299,8 @@ The bot observes Telegram platform limits and interaction conventions:
   The bot sends `ChatAction.TYPING` while translations are in progress.
 - **Command menu:**
   `configure_bot_commands()` registers bot commands across default, private chat, and group chat scopes.
+- **Application shutdown:**
+  `shutdown_bot()` runs via the `post_shutdown` application hook to close active Gemini client resources cleanly through `aclose_client()`.
 
 ### Response contracts matrix
 
@@ -288,14 +315,17 @@ The bot defines explicit reply outcomes for all input states and failure conditi
 | `/translate_preview` | Rate limit window saturated | `Translation rate limit reached. Please try again in {retry_after} seconds.` | Yes | None |
 | `/translate_preview` | Preview fetch fails | `Could not fetch text from the replied preview message.` | Yes | None |
 | `/translate_preview` | Translation call fails | `Could not translate this preview.` | Yes | None |
-| `/translate_preview` | Successful translation with URL | `Translation from {source_language} for {source_url}:\n\n{translated_text}` | Yes | Attached to first chunk |
-| `/translate_preview` | Successful translation without URL | `Translation from {source_language} for replied preview:\n\n{translated_text}` | Yes | Attached to first chunk |
+| `/translate_preview` | Translation exceeds 4096 characters | `Translation exceeds the maximum Telegram message limit of 4096 characters.` | Yes | None |
+| `/translate_preview` | Successful translation with URL | `Translation from {source_language} for {source_url}:\n\n{translated_text}` | Yes | Attached to reply |
+| `/translate_preview` | Successful translation without URL | `Translation from {source_language} for replied preview:\n\n{translated_text}` | Yes | Attached to reply |
 | `/translate_message` | Message is not a reply | `Please reply to a message to translate its text` | No | None |
 | `/translate_message` | Replied message authored by bot | `The message has already been translated` | Yes | None |
 | `/translate_message` | Replied message has no text | `The replied message has no text to translate.` | No | None |
+| `/translate_message` | Replied message exceeds 4096 characters | `The replied message exceeds the maximum Telegram message limit of 4096 characters.` | Yes | None |
 | `/translate_message` | Concurrency semaphore locked | `Too many translations are running. Please try again shortly.` | Yes | None |
 | `/translate_message` | Rate limit window saturated | `Translation rate limit reached. Please try again in {retry_after} seconds.` | Yes | None |
 | `/translate_message` | Translation call fails | `Could not translate this message.` | Yes | None |
+| `/translate_message` | Translation exceeds 4096 characters | `Translation exceeds the maximum Telegram message limit of 4096 characters.` | Yes | None |
 | `/translate_message` | Successful translation | `Translation from {source_language}:\n\n{translated_text}` | Yes | None |
 
 ## Service deployment

@@ -29,8 +29,8 @@ Enforce server-side request forgery (SSRF) defenses on all preview fetches:
 
 Enforce Telegram delivery and throughput constraints:
 - Enforce the global semaphore (`MAX_RUNNING_TRANSLATIONS = 3`) and sliding window rate limiter (`MAX_TRANSLATIONS_PER_MINUTE = 10`) before processing requests.
-- Always split messages longer than 4096 characters cleanly at line breaks before delivery.
-- Attach link preview options only to the first chunk of a multi-part response.
+- Reject messages and translations longer than 4096 characters with an explicit limit notice.
+- Attach link preview options to the preview translation reply.
 - Check and reject replied messages originating from the bot itself.
 
 Use semantic line breaks in Markdown prose: put each complete sentence on its own source line.

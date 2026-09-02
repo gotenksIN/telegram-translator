@@ -30,9 +30,11 @@ flowchart TD
     DirectText --> Gemini
 
     Gemini --> FormatReply[Format response with source language]
-    FormatReply --> SplitChunks[Split into chunks <= 4096 characters]
-    SplitChunks --> SendReply[Send replies with link preview on first chunk]
+    FormatReply --> CheckLength{Length <= 4096 chars?}
+    CheckLength -->|Yes| SendReply[Send reply with link preview for previews]
+    CheckLength -->|No| LimitError[Send limit error notice]
     SendReply --> User
+    LimitError --> User
 ```
 
 ## Features
