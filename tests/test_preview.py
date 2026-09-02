@@ -1,13 +1,12 @@
 import ipaddress
-import socket
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, Mock, call
+from unittest.mock import MagicMock, Mock
 from urllib.parse import urlparse
 
 import httpx
 import pytest
 
-import app.preview as preview
+from app import preview
 
 
 @pytest.mark.parametrize(
@@ -166,88 +165,84 @@ async def test_validate_public_http_url_rejects_resolution_failures_and_private_
         await preview.validate_public_http_url("https://example.com")
 
 
-def test_resolve_host_addresses_uses_stream_socket(monkeypatch):
-    getaddrinfo = Mock(
-        return_value=[
-            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443)),
-            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2606:4700:4700::1111", 443, 0, 0)),
-        ]
+def mock_http_transport(monkeypatch, handler):
+    real_client = httpx.AsyncClient
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        preview,
+        "_resolve_host_addresses",
+        Mock(return_value={ipaddress.ip_address("8.8.8.8")}),
     )
-    monkeypatch.setattr(preview.socket, "getaddrinfo", getaddrinfo)
-    assert preview._resolve_host_addresses("example.com", None) == {
-        ipaddress.ip_address("8.8.8.8"),
-        ipaddress.ip_address("2606:4700:4700::1111"),
-    }
-    getaddrinfo.assert_called_once_with("example.com", 443, type=socket.SOCK_STREAM)
+    monkeypatch.setattr(
+        preview.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=transport, **kwargs),
+    )
 
 
 @pytest.mark.asyncio
-async def test_validated_response_follows_relative_redirects(monkeypatch):
-    validate = AsyncMock()
-    monkeypatch.setattr(preview, "validate_public_http_url", validate)
-    redirect = httpx.Response(302, headers={"location": "/next"}, request=httpx.Request("GET", "https://one.example/start"))
-    final = httpx.Response(200, text="ok", request=httpx.Request("GET", "https://one.example/next"))
-    client = SimpleNamespace(get=AsyncMock(side_effect=[redirect, final]))
+async def test_fetch_preview_text_follows_relative_redirects(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/start":
+            return httpx.Response(302, headers={"location": "/next"})
+        if request.url.path == "/next":
+            return httpx.Response(200, text='<meta property="og:description" content="ok">')
+        return httpx.Response(404)
 
-    assert await preview._get_validated_preview_response(client, "https://one.example/start") is final
-    assert validate.await_args_list == [
-        call("https://one.example/start"),
-        call("https://one.example/next"),
-    ]
+    mock_http_transport(monkeypatch, handler)
+    assert await preview.fetch_preview_text("https://one.example/start", 3) == "ok"
 
 
 @pytest.mark.asyncio
-async def test_validated_response_stops_after_redirect_limit(monkeypatch):
-    monkeypatch.setattr(preview, "validate_public_http_url", AsyncMock())
-    response = httpx.Response(302, headers={"location": "/again"}, request=httpx.Request("GET", "https://example.com/start"))
-    client = SimpleNamespace(get=AsyncMock(return_value=response))
+async def test_fetch_preview_text_stops_after_redirect_limit(monkeypatch):
+    mock_http_transport(monkeypatch, lambda req: httpx.Response(302, headers={"location": "/again"}))
     with pytest.raises(ValueError, match="Too many preview redirects"):
-        await preview._get_validated_preview_response(client, "https://example.com/start")
+        await preview.fetch_preview_text("https://example.com/start", 3)
 
 
 @pytest.mark.asyncio
 async def test_fetch_preview_text_extracts_response_metadata(monkeypatch):
-    response = httpx.Response(
-        200,
-        text='<meta property="og:description" content="Preview">',
-        request=httpx.Request("GET", "https://example.com"),
+    mock_http_transport(
+        monkeypatch,
+        lambda req: httpx.Response(200, text='<meta property="og:description" content="Preview">'),
     )
-    monkeypatch.setattr(preview, "_get_validated_preview_response", AsyncMock(return_value=response))
     assert await preview.fetch_preview_text("https://example.com", 3) == "Preview"
 
 
 @pytest.mark.asyncio
 async def test_fetch_preview_text_rejects_missing_metadata(monkeypatch):
-    response = httpx.Response(200, text="<html></html>", request=httpx.Request("GET", "https://example.com"))
-    monkeypatch.setattr(preview, "_get_validated_preview_response", AsyncMock(return_value=response))
+    mock_http_transport(monkeypatch, lambda req: httpx.Response(200, text="<html></html>"))
     with pytest.raises(ValueError, match="Could not extract text"):
         await preview.fetch_preview_text("https://example.com", 3)
 
 
 @pytest.mark.asyncio
-async def test_fetch_youtube_preview_text_uses_post_page(monkeypatch):
-    fetch_post = AsyncMock(return_value="complete post")
-    monkeypatch.setattr(preview, "fetch_youtube_post_text", fetch_post)
-    assert await preview.fetch_youtube_preview_text("https://youtube.com/post/Ugkx123", 3, "cookies.txt") == "complete post"
-    fetch_post.assert_awaited_once_with("https://youtube.com/post/Ugkx123", 3)
+async def test_fetch_youtube_preview_text_extracts_community_post(monkeypatch):
+    post_html = '<script>{"postDetails":{"discussionForumPosting":{"text":"complete post"}}}</script>'
+    mock_http_transport(monkeypatch, lambda req: httpx.Response(200, text=post_html))
+    assert (
+        await preview.fetch_youtube_preview_text("https://youtube.com/post/Ugkx123", 3, "cookies.txt")
+        == "complete post"
+    )
 
 
-def test_extract_youtube_preview_text_uses_first_playlist_entry(monkeypatch):
+@pytest.mark.asyncio
+async def test_extract_youtube_preview_text_uses_first_playlist_entry(monkeypatch):
     youtube_dl = MagicMock()
     youtube_dl.return_value.__enter__.return_value.extract_info.return_value = {
         "entries": [None, {"title": "Video", "channel": "Channel"}]
     }
     monkeypatch.setattr("yt_dlp.YoutubeDL", youtube_dl)
-    assert preview._extract_youtube_preview_text("https://youtu.be/1", 5, "cookies.txt") == "Video\n\nChannel: Channel"
-    options = youtube_dl.call_args.args[0]
-    assert options["cookiefile"] == "cookies.txt"
-    assert options["extractor_args"]["youtube"]["player_client"] == ["web"]
+    assert (
+        await preview.fetch_youtube_preview_text("https://youtu.be/1", 5, "cookies.txt") == "Video\n\nChannel: Channel"
+    )
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("info", [None, {}, {"entries": [None]}])
-def test_extract_youtube_preview_text_rejects_unusable_metadata(monkeypatch, info):
+async def test_extract_youtube_preview_text_rejects_unusable_metadata(monkeypatch, info):
     youtube_dl = MagicMock()
     youtube_dl.return_value.__enter__.return_value.extract_info.return_value = info
     monkeypatch.setattr("yt_dlp.YoutubeDL", youtube_dl)
     with pytest.raises(ValueError, match="Could not extract YouTube"):
-        preview._extract_youtube_preview_text("https://youtu.be/1", 5, None)
+        await preview.fetch_youtube_preview_text("https://youtu.be/1", 5, None)

@@ -2,7 +2,6 @@ import pytest
 
 from app.settings import get_settings
 
-
 RELEVANT_ENV = (
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_API_BASE_URL",
