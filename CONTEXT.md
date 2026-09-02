@@ -29,25 +29,26 @@ flowchart TD
     D -->|Yes| E[Reply: already translated]
     D -->|No| F[Extract URL from text or caption]
     F -->|No URL| G[Reply: no URL found]
-    F -->|URL found| H{Is Twitter/X URL?}
-    H -->|Yes| I[Rewrite to TWITTER_PREVIEW_HOST]
-    H -->|No| J{Is YouTube URL?}
-    I --> K[Validate public IP: SSRF check]
-    J -->|Yes| L{Is YouTube post URL?}
-    L -->|Yes| K
-    L -->|No| M[Extract metadata via yt-dlp]
-    J -->|No| K
-    K --> N[Fetch preview page over HTTP]
-    N --> O[Extract OpenGraph / meta / title text]
-    M --> P[Clean preview text]
-    O --> P
-    P --> Q{Check semaphore & rate limit}
-    Q -->|Exceeded| R[Reply with rate limit or busy notice]
-    Q -->|Allowed| S[Send typing indicator]
-    S --> T[Call Gemini API with TranslationResponse schema]
-    T --> U[Format reply with source language and attribution]
-    U --> V[Split message into chunks <= 4096 chars]
-    V --> W[Send reply messages with link preview options on first chunk]
+    F -->|URL found| H{Check semaphore & rate limit}
+    H -->|Exceeded| I[Reply with rate limit or busy notice]
+    H -->|Allowed| J[Acquire concurrency slot]
+    J --> K[Send typing indicator]
+    K --> L{Is Twitter/X URL?}
+    L -->|Yes| M[Rewrite to TWITTER_PREVIEW_HOST]
+    L -->|No| N{Is YouTube URL?}
+    M --> O[Validate public IP: SSRF check]
+    N -->|Yes| P{Is YouTube post URL?}
+    P -->|Yes| O
+    P -->|No| Q[Extract metadata via yt-dlp]
+    N -->|No| O
+    O --> R[Fetch preview page over HTTP]
+    R --> S[Extract OpenGraph / meta / title text]
+    Q --> T[Clean preview text]
+    S --> T
+    T --> U[Call Gemini API with TranslationResponse schema]
+    U --> V[Format reply with source language and attribution]
+    V --> W[Split message into chunks <= 4096 chars]
+    W --> X[Send reply messages with link preview options on first chunk]
 ```
 
 ### Direct message translation flow (`/translate_message`)
