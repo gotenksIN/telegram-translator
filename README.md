@@ -93,7 +93,7 @@ Configure the bot using environment variables in `.env`:
 | `GEMINI_THINKING_LEVEL` | `medium` | Thinking budget level (`minimal`, `low`, `medium`, `high`). |
 | `TARGET_LANGUAGE` | `English` | Target translation language. |
 | `REQUEST_TIMEOUT_SECONDS` | `10` | Timeout in seconds for HTTP preview fetches and Gemini requests. |
-| `TWITTER_PREVIEW_HOST` | `hitlerx.com` | Hostname for rewritten Twitter/X preview links. |
+| `TWITTER_PREVIEW_HOST` | `girlcockx.com` | Hostname for rewritten Twitter/X preview links. |
 | `YOUTUBE_COOKIES_PATH` | None | Optional path to a cookies file for `yt-dlp`. |
 
 ## Usage

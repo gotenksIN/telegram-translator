@@ -90,6 +90,6 @@ def get_settings() -> Settings:
         GEMINI_THINKING_LEVEL=_choice_env("GEMINI_THINKING_LEVEL", THINKING_LEVELS, "medium"),
         TARGET_LANGUAGE=_env_with_default("TARGET_LANGUAGE", "English"),
         REQUEST_TIMEOUT_SECONDS=_positive_float_env("REQUEST_TIMEOUT_SECONDS", "10"),
-        TWITTER_PREVIEW_HOST=_host_env("TWITTER_PREVIEW_HOST", "hitlerx.com"),
+        TWITTER_PREVIEW_HOST=_host_env("TWITTER_PREVIEW_HOST", "girlcockx.com"),
         YOUTUBE_COOKIES_PATH=_optional_env("YOUTUBE_COOKIES_PATH"),
     )

@@ -34,7 +34,7 @@ def test_get_settings_loads_required_values_and_defaults(monkeypatch):
     assert settings.GEMINI_THINKING_LEVEL == "medium"
     assert settings.TARGET_LANGUAGE == "English"
     assert settings.REQUEST_TIMEOUT_SECONDS == 10.0
-    assert settings.TWITTER_PREVIEW_HOST == "hitlerx.com"
+    assert settings.TWITTER_PREVIEW_HOST == "girlcockx.com"
     assert settings.TELEGRAM_API_BASE_URL is None
     assert settings.GEMINI_API_BASE is None
     assert settings.YOUTUBE_COOKIES_PATH is None

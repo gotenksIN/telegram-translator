@@ -19,7 +19,7 @@ TRAILING_URL_PUNCTUATION = ".,;!?)]}。．、，；：！？）］｝】」』�
 TWITTER_HOSTS = {"twitter.com", "mobile.twitter.com", "x.com", "mobile.x.com"}
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
 YOUTUBE_POST_PATH_RE = re.compile(r"^/post/[^/]+/?$")
-DEFAULT_TWITTER_PREVIEW_HOST = "hitlerx.com"
+DEFAULT_TWITTER_PREVIEW_HOST = "girlcockx.com"
 MAX_PREVIEW_REDIRECTS = 5
 
 

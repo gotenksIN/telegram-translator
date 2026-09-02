@@ -137,7 +137,7 @@ The process environment can override any configuration variable.
 | `GEMINI_THINKING_LEVEL` | `medium` | Thinking budget level (`minimal`, `low`, `medium`, `high`). |
 | `TARGET_LANGUAGE` | `English` | Target translation language. |
 | `REQUEST_TIMEOUT_SECONDS` | `10.0` | Timeout in seconds for HTTP preview fetches and Gemini requests. |
-| `TWITTER_PREVIEW_HOST` | `hitlerx.com` | Hostname used to rewrite Twitter/X URLs for preview scraping. |
+| `TWITTER_PREVIEW_HOST` | `girlcockx.com` | Hostname used to rewrite Twitter/X URLs for preview scraping. |
 | `YOUTUBE_COOKIES_PATH` | None | Optional path to cookie file for `yt-dlp`. |
 
 The thinking level accepts `minimal`, `low`, `medium`, or `high`.
@@ -361,7 +361,7 @@ The systemd user unit enforces strict process confinement:
 A client, bot, or service that removes tracking parameters from URLs or provides clean embed links.
 
 **Preview host**:
-An alternative frontend service (such as `hitlerx.com` or `fxtwitter.com`) that generates OpenGraph metadata for Twitter/X posts.
+An alternative frontend service (such as `girlcockx.com` or `fxtwitter.com`) that generates OpenGraph metadata for Twitter/X posts.
 
 **Server-side request forgery (SSRF)**:
 A vulnerability where an application fetches remote resources from attacker-supplied URLs without restricting network destinations.
