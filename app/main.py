@@ -18,7 +18,7 @@ from telegram import (
 from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from app.gemini import translate_text
+from app.gemini import aclose_client, translate_text
 from app.preview import (
     extract_message_urls,
     extract_preview_url,
@@ -196,6 +196,10 @@ async def configure_bot_commands(application: Application) -> None:
     )
 
 
+async def shutdown_bot(application: Application) -> None:
+    await aclose_client()
+
+
 def reserve_translation_rate_slot(bot_data: dict, now: float) -> int | None:
     timestamps = bot_data[TRANSLATION_TIMESTAMPS_KEY]
     while timestamps and now - timestamps[0] >= TRANSLATION_RATE_WINDOW_SECONDS:
@@ -228,6 +232,7 @@ def main() -> None:
         .token(settings.TELEGRAM_BOT_TOKEN)
         .concurrent_updates(MAX_CONCURRENT_UPDATES)
         .post_init(configure_bot_commands)
+        .post_shutdown(shutdown_bot)
     )
     if settings.TELEGRAM_API_BASE_URL:
         base_api_root = settings.TELEGRAM_API_BASE_URL.rstrip("/")
