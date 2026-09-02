@@ -5,7 +5,6 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
 THINKING_LEVELS = ("minimal", "low", "medium", "high")

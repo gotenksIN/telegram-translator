@@ -12,7 +12,6 @@ import httpx
 from bs4 import BeautifulSoup
 from telegram import Message
 
-
 URL_RE = re.compile(r"https?://[^\s<>()]+", re.IGNORECASE)
 BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 TRAILING_URL_PUNCTUATION = ".,;!?)]}。．、，；：！？）］｝】」』》〉"
@@ -155,7 +154,12 @@ def _resolve_host_addresses(hostname: str, port: int | None) -> set[ipaddress.IP
 async def fetch_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None = None) -> str:
     if is_youtube_post_url(url):
         return await fetch_youtube_post_text(url, timeout_seconds)
-    return await wait_for(to_thread(_extract_youtube_preview_text, url, timeout_seconds, cookies_path), timeout_seconds)
+    try:
+        return await wait_for(
+            to_thread(_extract_youtube_preview_text, url, timeout_seconds, cookies_path), timeout_seconds
+        )
+    except TypeError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def is_youtube_post_url(url: str) -> bool:
@@ -220,7 +224,7 @@ def _extract_youtube_preview_text(url: str, timeout_seconds: float, cookies_path
         info = ydl.extract_info(url, download=False)
 
     if not isinstance(info, dict):
-        raise ValueError("Could not extract YouTube metadata")
+        raise TypeError("Could not extract YouTube metadata")
 
     entries = info.get("entries")
     if isinstance(entries, list):
