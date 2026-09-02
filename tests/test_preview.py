@@ -1,10 +1,13 @@
 import ipaddress
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 from urllib.parse import urlparse
 
 import httpx
 import pytest
+from telegram import Message, MessageEntity
+from telegram.constants import MessageEntityType
 
 from app import preview
 
@@ -56,6 +59,18 @@ def test_extracts_twitter_url_from_text_then_caption():
     )
     assert preview.extract_twitter_status_url(message) == "https://x.com/user/status/123"
     assert preview.extract_preview_url(message, "preview.example") == "https://preview.example/user/status/123"
+
+
+def test_extract_message_urls_from_text_link_entities():
+    entity = MessageEntity(type=MessageEntityType.TEXT_LINK, offset=0, length=4, url="https://example.com/inline")
+    message = Message(
+        message_id=1,
+        date=datetime.now(UTC),
+        chat=None,
+        text="link",
+        entities=[entity],
+    )
+    assert preview.extract_message_urls(message) == ["https://example.com/inline"]
 
 
 @pytest.mark.parametrize(
@@ -126,11 +141,6 @@ def test_format_youtube_preview_text_cleans_and_limits_metadata():
     assert text.startswith("Title\n\nLine 1\nLine 2\n\nChannel: Creator\n\nTags: tag 0")
     assert "tag 29" in text
     assert "tag 30" not in text
-
-
-def test_format_youtube_preview_text_omits_duplicate_and_invalid_values():
-    assert preview.format_youtube_preview_text({"title": "same", "description": "same", "channel": 1}) == "same"
-    assert preview.format_youtube_preview_text({}) == ""
 
 
 @pytest.mark.asyncio

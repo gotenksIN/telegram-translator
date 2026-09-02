@@ -11,6 +11,7 @@ from urllib.parse import ParseResult, urljoin, urlparse, urlunparse
 import httpx
 from bs4 import BeautifulSoup
 from telegram import Message
+from telegram.constants import MessageEntityType
 
 URL_RE = re.compile(r"https?://[^\s<>()]+", re.IGNORECASE)
 BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
@@ -36,6 +37,63 @@ class _YtDlpLogger:
         pass
 
 
+def extract_message_urls(message: Message) -> list[str]:
+    urls: list[str] = []
+
+    link_preview_options = getattr(message, "link_preview_options", None)
+    if link_preview_options is not None:
+        link_url = getattr(link_preview_options, "url", None)
+        if link_url:
+            urls.append(link_url)
+
+    text_urls = _extract_entity_urls(getattr(message, "parse_entities", None))
+    if not text_urls and (text := getattr(message, "text", None)):
+        text_urls = extract_urls(text)
+    urls.extend(text_urls)
+
+    caption_urls = _extract_entity_urls(getattr(message, "parse_caption_entities", None))
+    if not caption_urls and (caption := getattr(message, "caption", None)):
+        caption_urls = extract_urls(caption)
+    urls.extend(caption_urls)
+
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for url in urls:
+        if url not in seen:
+            seen.add(url)
+            deduped.append(url)
+    return deduped
+
+
+def _extract_entity_urls(parse_fn: object) -> list[str]:
+    if not callable(parse_fn):
+        return []
+
+    try:
+        entities = parse_fn([MessageEntityType.URL, MessageEntityType.TEXT_LINK])
+    except TypeError:
+        entities = parse_fn()
+
+    if not isinstance(entities, dict):
+        return []
+
+    urls: list[str] = []
+    for entity, text in entities.items():
+        if getattr(entity, "type", None) == MessageEntityType.TEXT_LINK:
+            url = getattr(entity, "url", None)
+            if url:
+                urls.append(url)
+        elif getattr(entity, "type", None) == MessageEntityType.URL and text:
+            cleaned = text.rstrip(TRAILING_URL_PUNCTUATION)
+            if cleaned:
+                parsed = urlparse(cleaned)
+                if not parsed.scheme or "://" not in cleaned:
+                    cleaned = f"https://{cleaned}"
+                cleaned = cleaned.rstrip(TRAILING_URL_PUNCTUATION)
+                urls.append(cleaned)
+    return urls
+
+
 def extract_preview_url(message: Message, preview_host: str = DEFAULT_TWITTER_PREVIEW_HOST) -> str | None:
     source_url = extract_twitter_status_url(message)
     if source_url is None:
@@ -44,12 +102,9 @@ def extract_preview_url(message: Message, preview_host: str = DEFAULT_TWITTER_PR
 
 
 def extract_twitter_status_url(message: Message) -> str | None:
-    for text in (message.text, message.caption):
-        if not text:
-            continue
-        for url in extract_urls(text):
-            if is_supported_twitter_url(urlparse(url)):
-                return url
+    for url in extract_message_urls(message):
+        if is_supported_twitter_url(urlparse(url)):
+            return url
 
     return None
 

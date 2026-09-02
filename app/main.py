@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from asyncio import BoundedSemaphore
@@ -19,7 +20,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from app.gemini import translate_text
 from app.preview import (
-    extract_first_url,
+    extract_message_urls,
     extract_preview_url,
     extract_twitter_status_url,
     fetch_preview_text,
@@ -67,7 +68,8 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
     source_url = extract_twitter_status_url(replied_message)
     source_type = "tweet"
     if preview_url is None:
-        fallback_url = extract_first_url(replied_message.text or replied_message.caption or "")
+        urls = extract_message_urls(replied_message)
+        fallback_url = urls[0] if urls else None
         if fallback_url is None:
             await message.reply_text("Could not find a URL in the replied message.")
             return
@@ -149,6 +151,12 @@ async def translate_message_command(update: Update, context: ContextTypes.DEFAUL
         await message.reply_text("The replied message has no text to translate.")
         return
 
+    if len(source_text) > TELEGRAM_MESSAGE_LIMIT:
+        await message.reply_text(
+            "The replied message exceeds the maximum Telegram message limit of 4096 characters.", do_quote=True
+        )
+        return
+
     now = time.monotonic()
     semaphore = context.application.bot_data[TRANSLATION_SEMAPHORE_KEY]
     if semaphore.locked():
@@ -181,9 +189,11 @@ async def translate_message_command(update: Update, context: ContextTypes.DEFAUL
 
 
 async def configure_bot_commands(application: Application) -> None:
-    await application.bot.set_my_commands(BOT_COMMANDS, scope=BotCommandScopeDefault())
-    await application.bot.set_my_commands(BOT_COMMANDS, scope=BotCommandScopeAllPrivateChats())
-    await application.bot.set_my_commands(BOT_COMMANDS, scope=BotCommandScopeAllGroupChats())
+    await asyncio.gather(
+        application.bot.set_my_commands(BOT_COMMANDS, scope=BotCommandScopeDefault()),
+        application.bot.set_my_commands(BOT_COMMANDS, scope=BotCommandScopeAllPrivateChats()),
+        application.bot.set_my_commands(BOT_COMMANDS, scope=BotCommandScopeAllGroupChats()),
+    )
 
 
 def reserve_translation_rate_slot(bot_data: dict, now: float) -> int | None:
@@ -199,35 +209,16 @@ def reserve_translation_rate_slot(bot_data: dict, now: float) -> int | None:
 
 
 async def reply_long_text(message: Message, text: str, preview_url: str | None = None) -> None:
-    chunks = split_telegram_message(text) or ["No text to send."]
-    for index, chunk in enumerate(chunks):
-        link_preview_options = None
-        if index == 0 and preview_url is not None:
-            link_preview_options = LinkPreviewOptions(url=preview_url, prefer_large_media=True, show_above_text=False)
-        await message.reply_text(chunk, do_quote=True, link_preview_options=link_preview_options)
+    if len(text) > TELEGRAM_MESSAGE_LIMIT:
+        await message.reply_text(
+            "Translation exceeds the maximum Telegram message limit of 4096 characters.", do_quote=True
+        )
+        return
 
-
-def split_telegram_message(text: str) -> list[str]:
-    if len(text) <= TELEGRAM_MESSAGE_LIMIT:
-        text = text.strip()
-        return [text] if text else []
-
-    chunks: list[str] = []
-    remaining = text
-    while len(remaining) > TELEGRAM_MESSAGE_LIMIT:
-        split_at = remaining.rfind("\n", 0, TELEGRAM_MESSAGE_LIMIT + 1)
-        if split_at <= 0:
-            split_at = TELEGRAM_MESSAGE_LIMIT
-        chunk = remaining[:split_at].rstrip()
-        if chunk:
-            chunks.append(chunk)
-        remaining = remaining[split_at:].lstrip()
-
-    remaining = remaining.strip()
-    if remaining:
-        chunks.append(remaining)
-
-    return chunks
+    link_preview_options = None
+    if preview_url is not None:
+        link_preview_options = LinkPreviewOptions(url=preview_url, prefer_large_media=True, show_above_text=False)
+    await message.reply_text(text, do_quote=True, link_preview_options=link_preview_options)
 
 
 def main() -> None:

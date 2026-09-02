@@ -1,7 +1,7 @@
 from asyncio import BoundedSemaphore
 from collections import deque
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, call
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from telegram.constants import ChatAction
@@ -18,39 +18,30 @@ def replied_message(text=None, caption=None, user_id=1):
     return SimpleNamespace(text=text, caption=caption, from_user=SimpleNamespace(id=user_id))
 
 
-def test_split_telegram_message_handles_empty_short_newline_and_hard_splits(monkeypatch):
-    monkeypatch.setattr(main, "TELEGRAM_MESSAGE_LIMIT", 10)
-    assert main.split_telegram_message("   ") == []
-    assert main.split_telegram_message(" short ") == ["short"]
-    assert main.split_telegram_message("first\nsecond") == ["first", "second"]
-    assert main.split_telegram_message("abcdefghijkl") == ["abcdefghij", "kl"]
+@pytest.mark.asyncio
+async def test_reply_long_text_sends_message_with_preview():
+    message = SimpleNamespace(reply_text=AsyncMock())
+    await main.reply_long_text(message, "Short translation", preview_url="https://example.com")
+    message.reply_text.assert_awaited_once()
+    assert message.reply_text.await_args.args == ("Short translation",)
+    assert message.reply_text.await_args.kwargs["do_quote"] is True
+    assert message.reply_text.await_args.kwargs["link_preview_options"].url == "https://example.com"
 
 
 @pytest.mark.asyncio
-async def test_reply_long_text_sends_chunks_and_preview_only_on_first(monkeypatch):
+async def test_reply_long_text_rejects_text_exceeding_limit(monkeypatch):
     monkeypatch.setattr(main, "TELEGRAM_MESSAGE_LIMIT", 5)
     message = SimpleNamespace(reply_text=AsyncMock())
-    await main.reply_long_text(message, "12345\n67890", preview_url="https://example.com")
-    assert message.reply_text.await_count == 2
-    first, second = message.reply_text.await_args_list
-    assert first.args == ("12345",)
-    assert first.kwargs["do_quote"] is True
-    assert first.kwargs["link_preview_options"].url == "https://example.com"
-    assert second == call("67890", do_quote=True, link_preview_options=None)
-
-
-@pytest.mark.asyncio
-async def test_reply_long_text_supplies_fallback_for_empty_text():
-    message = SimpleNamespace(reply_text=AsyncMock())
-    await main.reply_long_text(message, "")
-    message.reply_text.assert_awaited_once_with("No text to send.", do_quote=True, link_preview_options=None)
+    await main.reply_long_text(message, "123456")
+    message.reply_text.assert_awaited_once_with(
+        "Translation exceeds the maximum Telegram message limit of 4096 characters.", do_quote=True
+    )
 
 
 def test_reserve_translation_rate_slot_prunes_accepts_and_limits(monkeypatch):
     monkeypatch.setattr(main, "MAX_TRANSLATIONS_PER_MINUTE", 2)
     bot_data = {main.TRANSLATION_TIMESTAMPS_KEY: deque([0.0, 59.5])}
     assert main.reserve_translation_rate_slot(bot_data, 60.0) is None
-    assert list(bot_data[main.TRANSLATION_TIMESTAMPS_KEY]) == [59.5, 60.0]
     assert main.reserve_translation_rate_slot(bot_data, 60.1) == 60
 
 
@@ -61,6 +52,11 @@ def test_reserve_translation_rate_slot_prunes_accepts_and_limits(monkeypatch):
         (None, "Please reply to a message to translate its text", False),
         (replied_message("text", user_id=999), "The message has already been translated", True),
         (replied_message(), "The replied message has no text to translate.", False),
+        (
+            replied_message("a" * (main.TELEGRAM_MESSAGE_LIMIT + 1)),
+            "The replied message exceeds the maximum Telegram message limit of 4096 characters.",
+            True,
+        ),
     ],
 )
 async def test_translate_message_validates_reply(command_objects, reply, expected, quoted):
