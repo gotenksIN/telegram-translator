@@ -150,48 +150,68 @@ def is_supported_twitter_url(parsed_url: ParseResult) -> bool:
 
 
 async def fetch_preview_text(url: str, timeout_seconds: float) -> str:
-    async with httpx.AsyncClient(
-        timeout=timeout_seconds,
-        follow_redirects=False,
-        headers={"User-Agent": "TelegramTranslateBot/0.1"},
-    ) as client:
-        response = await _get_validated_preview_response(client, url)
-        response.raise_for_status()
-
-    text = extract_preview_text(response.text)
+    page_html = await _fetch_preview_html(url, timeout_seconds, "TelegramTranslateBot/0.1")
+    text = extract_preview_text(page_html)
     if not text:
         raise ValueError("Could not extract text from preview metadata")
-
     return text
 
 
-async def _get_validated_preview_response(client: httpx.AsyncClient, url: str) -> httpx.Response:
-    next_url = url
-    for _ in range(MAX_PREVIEW_REDIRECTS + 1):
-        await validate_public_http_url(next_url)
-        response = await client.get(next_url)
-        if not response.is_redirect:
-            return response
+async def _fetch_preview_html(url: str, timeout_seconds: float, user_agent: str) -> str:
+    return await _fetch_validated_preview_html(url, timeout_seconds, user_agent)
 
-        location = response.headers.get("location")
-        if not location:
-            return response
-        next_url = urljoin(str(response.url), location)
+
+async def _fetch_validated_preview_html(url: str, timeout_seconds: float, user_agent: str) -> str:
+    async with httpx.AsyncClient(
+        timeout=timeout_seconds,
+        follow_redirects=False,
+        trust_env=False,
+        headers={"User-Agent": user_agent, "Accept-Encoding": "identity"},
+    ) as client:
+        next_url = url
+        for _ in range(MAX_PREVIEW_REDIRECTS + 1):
+            addresses = await validate_public_http_url(next_url)
+            original_url = httpx.URL(next_url)
+            resolved = sorted(addresses, key=str)
+            for index, address in enumerate(resolved):
+                pinned_url = original_url.copy_with(host=str(address))
+                client.cookies.clear()
+                connect_timeout = timeout_seconds
+                try:
+                    async with client.stream(
+                        "GET",
+                        pinned_url,
+                        headers={"Host": original_url.netloc.decode("ascii")},
+                        extensions={"sni_hostname": original_url.raw_host.decode("ascii")},
+                        timeout=httpx.Timeout(timeout_seconds, connect=connect_timeout),
+                    ) as response:
+                        if response.is_redirect and (location := response.headers.get("location")):
+                            next_url = urljoin(next_url, location)
+                            break
+                        response.raise_for_status()
+                        return (await response.aread()).decode(response.encoding or "utf-8", errors="replace")
+                except (httpx.ConnectError, httpx.ConnectTimeout):
+                    if index == len(resolved) - 1:
+                        raise
 
     raise ValueError("Too many preview redirects")
 
 
-async def validate_public_http_url(url: str) -> None:
-    parsed = urlparse(url)
+async def validate_public_http_url(url: str) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("Invalid preview URL") from exc
     if parsed.scheme not in {"http", "https"}:
         raise ValueError("Preview URL must use http or https")
 
-    hostname = parsed.hostname
-    if not hostname:
+    if not hostname or parsed.username is not None or parsed.password is not None:
         raise ValueError("Preview URL must include a hostname")
 
     try:
-        addresses = await to_thread(_resolve_host_addresses, hostname, parsed.port)
+        addresses = await to_thread(_resolve_host_addresses, hostname, port)
     except OSError as exc:
         raise ValueError("Could not resolve preview URL host") from exc
 
@@ -199,6 +219,7 @@ async def validate_public_http_url(url: str) -> None:
         raise ValueError("Could not resolve preview URL host")
     if any(not address.is_global or address.is_multicast or address.is_reserved for address in addresses):
         raise ValueError("Preview URL resolves to a non-public address")
+    return addresses
 
 
 def _resolve_host_addresses(hostname: str, port: int | None) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -223,15 +244,8 @@ def is_youtube_post_url(url: str) -> bool:
 
 
 async def fetch_youtube_post_text(url: str, timeout_seconds: float) -> str:
-    async with httpx.AsyncClient(
-        timeout=timeout_seconds,
-        follow_redirects=False,
-        headers={"User-Agent": "Mozilla/5.0"},
-    ) as client:
-        response = await _get_validated_preview_response(client, url)
-        response.raise_for_status()
-
-    text = extract_youtube_post_text(response.text)
+    page_html = await _fetch_preview_html(url, timeout_seconds, "Mozilla/5.0")
+    text = extract_youtube_post_text(page_html)
     if not text:
         raise ValueError("Could not extract YouTube post text")
     return text

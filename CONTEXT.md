@@ -253,9 +253,10 @@ It validates supported path patterns:
 1. Enforces `http` or `https` scheme.
 2. Requires a valid hostname.
 3. Resolves DNS addresses using `socket.getaddrinfo()` in a background thread.
-4. Validates that every resolved IPv4 and IPv6 address is globally routable using `address.is_global`.
-5. Rejects private, loopback, link-local, multicast, and reserved addresses with `ValueError`.
-6. Follows up to 5 redirects (`MAX_PREVIEW_REDIRECTS = 5`), validating each intermediate destination URL before sending the request.
+4. Rejects every resolved address that is not globally routable or is multicast or reserved.
+5. Connects to a validated IP address while retaining the original HTTP Host header and TLS server name.
+6. Follows up to 5 redirects (`MAX_PREVIEW_REDIRECTS = 5`), validating and pinning each intermediate destination before sending the request.
+7. Disables environment proxy settings so a proxy cannot bypass the pinned destination.
 
 ### Network boundaries and timeouts
 
