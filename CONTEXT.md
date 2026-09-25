@@ -142,7 +142,7 @@ The process environment can override any configuration variable.
 
 The thinking level accepts `minimal`, `low`, `medium`, or `high`.
 `REQUEST_TIMEOUT_SECONDS` must be a positive finite number.
-`TWITTER_PREVIEW_HOST` must be a valid host without scheme or path components.
+`TWITTER_PREVIEW_HOST` must be an ASCII hostname with an optional port from 1 to 65535, without user information, scheme, or path components.
 `TELEGRAM_API_BASE_URL` and `GEMINI_API_BASE` must be valid `http` or `https` URLs.
 
 ## Structured data schemas

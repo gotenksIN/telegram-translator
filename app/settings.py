@@ -1,4 +1,5 @@
 import os
+import re
 from dataclasses import dataclass
 from math import isfinite
 from urllib.parse import urlparse
@@ -8,6 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 THINKING_LEVELS = ("minimal", "low", "medium", "high")
+HOSTNAME_RE = re.compile(
+    r"(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*"
+)
 
 
 def _required_env(name: str) -> str:
@@ -40,16 +44,34 @@ def _optional_http_url_env(name: str) -> str | None:
     if value is None:
         return None
 
-    parsed = urlparse(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    try:
+        parsed = urlparse(value)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise RuntimeError(f"Environment variable must be an http(s) URL: {name}") from exc
+    if parsed.scheme not in {"http", "https"} or not hostname or port == 0:
         raise RuntimeError(f"Environment variable must be an http(s) URL: {name}")
     return value.rstrip("/")
 
 
 def _host_env(name: str, default: str) -> str:
     value = _env_with_default(name, default)
-    parsed = urlparse(f"//{value}")
-    if parsed.netloc != value or not parsed.hostname:
+    try:
+        parsed = urlparse(f"//{value}")
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise RuntimeError(f"Environment variable must be a host name without a scheme or path: {name}") from exc
+    if (
+        parsed.netloc != value
+        or not hostname
+        or HOSTNAME_RE.fullmatch(hostname) is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or (":" in value and port is None)
+        or port == 0
+    ):
         raise RuntimeError(f"Environment variable must be a host name without a scheme or path: {name}")
     return value
 
