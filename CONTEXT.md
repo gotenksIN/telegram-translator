@@ -83,7 +83,7 @@ Every tracked file in this repository has a defined responsibility.
 | --- | --- |
 | `app/__init__.py` | Package root. |
 | `app/settings.py` | Environment variable validation and immutable Settings configuration object. |
-| `app/preview.py` | URL extraction, Twitter rewriting, SSRF DNS validation, YouTube metadata fetching, and HTML preview extraction. |
+| `app/preview.py` | URL extraction, Twitter rewriting, pinned-address SSRF validation, bounded yt-dlp metadata extraction, YouTube post parsing, and bounded HTML preview extraction. |
 | `app/gemini.py` | Gemini client management, prompt synthesis, structured Pydantic response models, and API translation requests. |
 | `app/main.py` | Telegram bot application setup, command handlers, rate limiting, concurrency semaphores, message length limit enforcement, and polling loop. |
 | `tests/conftest.py` | Pytest fixtures and shared mocks. |
@@ -119,7 +119,7 @@ Runtime dependencies:
 - `python-telegram-bot>=22.0` for the Telegram Bot API framework.
 - `httpx>=0.28.0` for asynchronous HTTP requests.
 - `beautifulsoup4>=4.14.0` for HTML and OpenGraph metadata extraction.
-- `yt-dlp>=2026.3.17` for YouTube metadata extraction.
+- `yt-dlp>=2026.3.17` for bounded YouTube metadata extraction.
 - `python-dotenv>=1.2.0` for loading `.env` configuration.
 
 ## Configuration
@@ -233,10 +233,10 @@ It validates supported path patterns:
    `extract_youtube_post_text()` parses the `<script>` tag containing `"discussionForumPosting"`.
    It decodes raw JSON to locate the `text` attribute.
 2. **Standard videos, music, and shorts:**
-   `_extract_youtube_preview_text()` runs `yt_dlp.YoutubeDL` in a background thread.
-   When cookies are provided, it uses the `web` player client.
-   Otherwise, it tries `ios`, `android`, and `web` player clients with `geo_bypass=True`.
-   `format_youtube_preview_text()` formats the title, description, channel/uploader, and up to 30 tags.
+   Run `yt-dlp` in a background thread with bounded requests.
+   Its request adapter validates and pins each URL and redirect before connecting, bounds each body to 8 MiB, and rejects encoded responses.
+   When cookies are provided, use the `web` player client; otherwise, try `ios`, `android`, and `web` clients.
+   Format the title, description, channel/uploader, and up to 30 tags.
 3. **Fallback:**
    If `yt-dlp` metadata extraction fails, the bot falls back to standard HTTP HTML preview extraction.
 
@@ -266,7 +266,7 @@ Network requests enforce strict timeouts and error isolation:
 - If a validated address cannot be reached, the fetch tries another validated address within the same deadline.
 - Preview requests do not carry cookies between redirects; the client clears response cookies before each request.
 - The bot closes redirect responses without buffering their bodies and validates each destination before its request.
-- `yt-dlp` metadata extraction runs with `socket_timeout=settings.REQUEST_TIMEOUT_SECONDS`.
+- `yt-dlp` metadata uses a validated, pinned synchronous request adapter in a background thread with `socket_timeout=settings.REQUEST_TIMEOUT_SECONDS`.
 - Gemini API generation calls use `asyncio.wait_for(..., timeout=settings.REQUEST_TIMEOUT_SECONDS)`.
 - When an external preview fetch or Gemini call fails or times out, the handler catches the exception, logs diagnostic details, and sends a user-facing failure response without crashing the bot daemon.
 

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import html
+import io
 import ipaddress
 import json
 import re
 import socket
+import time
+import urllib.request
 from asyncio import get_running_loop, timeout, to_thread, wait_for
 from urllib.parse import ParseResult, urljoin, urlparse, urlunparse
 
@@ -12,6 +16,11 @@ import httpx
 from bs4 import BeautifulSoup
 from telegram import Message
 from telegram.constants import MessageEntityType
+from yt_dlp import YoutubeDL
+from yt_dlp.networking import Request as YtDlpRequest
+from yt_dlp.networking import Response as YtDlpResponse
+from yt_dlp.networking.exceptions import HTTPError as YtDlpHTTPError
+from yt_dlp.networking.exceptions import TransportError as YtDlpTransportError
 
 URL_RE = re.compile(r"https?://[^\s<>()]+", re.IGNORECASE)
 BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
@@ -22,6 +31,7 @@ YOUTUBE_POST_PATH_RE = re.compile(r"^/post/[^/]+/?$")
 DEFAULT_TWITTER_PREVIEW_HOST = "girlcockx.com"
 MAX_PREVIEW_REDIRECTS = 5
 MAX_PREVIEW_BODY_BYTES = 2 * 1024 * 1024
+MAX_YOUTUBE_BODY_BYTES = 8 * 1024 * 1024
 
 
 class _YtDlpLogger:
@@ -281,7 +291,16 @@ def extract_youtube_post_text(page_html: str) -> str | None:
 
 
 def _extract_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None) -> str:
-    from yt_dlp import YoutubeDL
+    deadline = time.monotonic() + timeout_seconds
+
+    class ValidatedYoutubeDL(YoutubeDL):
+        def urlopen(self, request):
+            if isinstance(request, str):
+                request = YtDlpRequest(request)
+            try:
+                return _fetch_youtube_request(request, self.cookiejar, deadline, self.params["http_headers"])
+            except httpx.TransportError as exc:
+                raise YtDlpTransportError(cause=exc) from exc
 
     options: dict = {
         "check_formats": False,
@@ -299,20 +318,117 @@ def _extract_youtube_preview_text(url: str, timeout_seconds: float, cookies_path
     }
     if cookies_path:
         options["cookiefile"] = cookies_path
-    with YoutubeDL(options) as ydl:
+    with ValidatedYoutubeDL(options) as ydl:
         info = ydl.extract_info(url, download=False)
 
     if not isinstance(info, dict):
         raise TypeError("Could not extract YouTube metadata")
-
     entries = info.get("entries")
     if isinstance(entries, list):
         info = next((entry for entry in entries if isinstance(entry, dict)), info)
-
     text = format_youtube_preview_text(info)
     if not text:
         raise ValueError("Could not extract YouTube preview text")
     return text
+
+
+def _fetch_youtube_request(request, cookiejar, deadline: float, default_headers: dict) -> YtDlpResponse:
+    if isinstance(request, str):
+        request = YtDlpRequest(request)
+    elif isinstance(request, urllib.request.Request):
+        request = YtDlpRequest(
+            request.full_url,
+            data=request.data,
+            headers=dict(request.headers),
+            method=request.get_method(),
+        )
+    elif not hasattr(request, "url"):
+        raise ValueError("Invalid YouTube request")
+    url = request.url
+    if request.data is not None:
+        if hasattr(request.data, "read"):
+            data = request.data.read(MAX_YOUTUBE_BODY_BYTES + 1)
+        elif isinstance(request.data, (bytes, bytearray)):
+            data = bytes(request.data)
+        elif hasattr(request.data, "__iter__"):
+            data = b"".join(request.data)
+        else:
+            data = request.data
+        if not isinstance(data, bytes) or len(data) > MAX_YOUTUBE_BODY_BYTES:
+            raise ValueError("YouTube request body exceeds size limit")
+    else:
+        data = None
+    headers = {name.title(): value for name, value in default_headers.items()}
+    headers.update({name.title(): value for name, value in request.headers.items()})
+    method = request.method
+    with httpx.Client(follow_redirects=False, trust_env=False) as client:
+        for _ in range(MAX_PREVIEW_REDIRECTS + 1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("YouTube metadata deadline exceeded")
+            addresses = asyncio.run(validate_public_http_url(url))
+            original = httpx.URL(url)
+            cookie_request = urllib.request.Request(url)
+            cookiejar.add_cookie_header(cookie_request)
+            if cookie_request.has_header("Cookie"):
+                headers["Cookie"] = cookie_request.get_header("Cookie")
+            for index, address in enumerate(sorted(addresses, key=str)):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("YouTube metadata deadline exceeded")
+                pinned = original.copy_with(host=str(address))
+                resolved_count = len(addresses) - index
+                client.cookies.clear()
+                try:
+                    with client.stream(
+                        method,
+                        pinned,
+                        content=data,
+                        headers={**headers, "Host": original.netloc.decode("ascii"), "Accept-Encoding": "identity"},
+                        extensions={"sni_hostname": original.raw_host.decode("ascii")},
+                        timeout=httpx.Timeout(remaining, connect=remaining / resolved_count),
+                    ) as response:
+                        response_headers = dict(response.headers)
+                        response_headers.pop("set-cookie", None)
+                        result = YtDlpResponse(io.BytesIO(), url, response_headers, status=response.status_code)
+                        for cookie in response.headers.get_list("set-cookie"):
+                            result.headers.add_header("Set-Cookie", cookie)
+                        cookiejar.extract_cookies(result, cookie_request)
+                        if response.is_redirect and (location := response.headers.get("location")):
+                            redirected_url = urljoin(url, location)
+                            destination = httpx.URL(redirected_url)
+                            if (original.scheme, original.raw_host, original.port) != (
+                                destination.scheme,
+                                destination.raw_host,
+                                destination.port,
+                            ):
+                                headers.pop("Authorization", None)
+                                headers.pop("Cookie", None)
+                            headers.pop("Cookie", None)
+                            if (response.status_code == 303 and method != "HEAD") or (
+                                response.status_code in (301, 302) and method == "POST"
+                            ):
+                                method = "GET"
+                                data = None
+                                for name in ("Content-Type", "Content-Length", "Transfer-Encoding"):
+                                    headers.pop(name, None)
+                            url = redirected_url
+                            break
+                        if response.headers.get("content-encoding", "identity").lower() != "identity":
+                            raise ValueError("Compressed YouTube responses are not supported")
+                        body = bytearray()
+                        for chunk in response.iter_bytes(chunk_size=65536):
+                            body.extend(chunk)
+                            if len(body) > MAX_YOUTUBE_BODY_BYTES:
+                                raise ValueError("YouTube response exceeds size limit")
+                        result.fp = io.BytesIO(body)
+                        if response.status_code >= 400:
+                            raise YtDlpHTTPError(result)
+                        return result
+                except (httpx.ConnectError, httpx.ConnectTimeout):
+                    if index == len(addresses) - 1:
+                        raise
+    raise ValueError("Too many YouTube redirects")
 
 
 def format_youtube_preview_text(info: dict) -> str:

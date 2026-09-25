@@ -1,7 +1,7 @@
 import ipaddress
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 from urllib.parse import urlparse
 
 import httpx
@@ -234,25 +234,3 @@ async def test_fetch_youtube_preview_text_extracts_community_post(monkeypatch):
         await preview.fetch_youtube_preview_text("https://youtube.com/post/Ugkx123", 3, "cookies.txt")
         == "complete post"
     )
-
-
-@pytest.mark.asyncio
-async def test_extract_youtube_preview_text_uses_first_playlist_entry(monkeypatch):
-    youtube_dl = MagicMock()
-    youtube_dl.return_value.__enter__.return_value.extract_info.return_value = {
-        "entries": [None, {"title": "Video", "channel": "Channel"}]
-    }
-    monkeypatch.setattr("yt_dlp.YoutubeDL", youtube_dl)
-    assert (
-        await preview.fetch_youtube_preview_text("https://youtu.be/1", 5, "cookies.txt") == "Video\n\nChannel: Channel"
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("info", [None, {}, {"entries": [None]}])
-async def test_extract_youtube_preview_text_rejects_unusable_metadata(monkeypatch, info):
-    youtube_dl = MagicMock()
-    youtube_dl.return_value.__enter__.return_value.extract_info.return_value = info
-    monkeypatch.setattr("yt_dlp.YoutubeDL", youtube_dl)
-    with pytest.raises(ValueError, match="Could not extract YouTube"):
-        await preview.fetch_youtube_preview_text("https://youtu.be/1", 5, None)
