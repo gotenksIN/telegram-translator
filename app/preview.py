@@ -5,7 +5,7 @@ import ipaddress
 import json
 import re
 import socket
-from asyncio import to_thread, wait_for
+from asyncio import get_running_loop, timeout, to_thread, wait_for
 from urllib.parse import ParseResult, urljoin, urlparse, urlunparse
 
 import httpx
@@ -21,6 +21,7 @@ YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtu
 YOUTUBE_POST_PATH_RE = re.compile(r"^/post/[^/]+/?$")
 DEFAULT_TWITTER_PREVIEW_HOST = "girlcockx.com"
 MAX_PREVIEW_REDIRECTS = 5
+MAX_PREVIEW_BODY_BYTES = 2 * 1024 * 1024
 
 
 class _YtDlpLogger:
@@ -158,10 +159,12 @@ async def fetch_preview_text(url: str, timeout_seconds: float) -> str:
 
 
 async def _fetch_preview_html(url: str, timeout_seconds: float, user_agent: str) -> str:
-    return await _fetch_validated_preview_html(url, timeout_seconds, user_agent)
+    async with timeout(timeout_seconds):
+        return await _fetch_validated_preview_html(url, timeout_seconds, user_agent)
 
 
 async def _fetch_validated_preview_html(url: str, timeout_seconds: float, user_agent: str) -> str:
+    deadline = get_running_loop().time() + timeout_seconds
     async with httpx.AsyncClient(
         timeout=timeout_seconds,
         follow_redirects=False,
@@ -176,7 +179,7 @@ async def _fetch_validated_preview_html(url: str, timeout_seconds: float, user_a
             for index, address in enumerate(resolved):
                 pinned_url = original_url.copy_with(host=str(address))
                 client.cookies.clear()
-                connect_timeout = timeout_seconds
+                connect_timeout = max(0.001, (deadline - get_running_loop().time()) / (len(resolved) - index))
                 try:
                     async with client.stream(
                         "GET",
@@ -189,7 +192,14 @@ async def _fetch_validated_preview_html(url: str, timeout_seconds: float, user_a
                             next_url = urljoin(next_url, location)
                             break
                         response.raise_for_status()
-                        return (await response.aread()).decode(response.encoding or "utf-8", errors="replace")
+                        if response.headers.get("content-encoding", "identity").lower() != "identity":
+                            raise ValueError("Compressed preview responses are not supported")
+                        body = bytearray()
+                        async for chunk in response.aiter_bytes(chunk_size=65536):
+                            body.extend(chunk)
+                            if len(body) > MAX_PREVIEW_BODY_BYTES:
+                                raise ValueError("Preview response exceeds size limit")
+                        return body.decode(response.encoding or "utf-8", errors="replace")
                 except (httpx.ConnectError, httpx.ConnectTimeout):
                     if index == len(resolved) - 1:
                         raise

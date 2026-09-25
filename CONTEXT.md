@@ -261,8 +261,11 @@ It validates supported path patterns:
 ### Network boundaries and timeouts
 
 Network requests enforce strict timeouts and error isolation:
-- Preview page fetches use HTTPX with `timeout=settings.REQUEST_TIMEOUT_SECONDS` and `follow_redirects=False`.
-- The bot handles redirects manually to validate destination IPs before each request.
+- Preview page fetches use HTTPX streaming with `follow_redirects=False`, a total `settings.REQUEST_TIMEOUT_SECONDS` deadline across DNS and all redirects, and a 2 MiB body limit.
+- Fetches request uncompressed content and reject encoded responses before reading the body.
+- If a validated address cannot be reached, the fetch tries another validated address within the same deadline.
+- Preview requests do not carry cookies between redirects; the client clears response cookies before each request.
+- The bot closes redirect responses without buffering their bodies and validates each destination before its request.
 - `yt-dlp` metadata extraction runs with `socket_timeout=settings.REQUEST_TIMEOUT_SECONDS`.
 - Gemini API generation calls use `asyncio.wait_for(..., timeout=settings.REQUEST_TIMEOUT_SECONDS)`.
 - When an external preview fetch or Gemini call fails or times out, the handler catches the exception, logs diagnostic details, and sends a user-facing failure response without crashing the bot daemon.
