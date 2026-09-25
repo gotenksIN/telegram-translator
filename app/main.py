@@ -64,11 +64,16 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
         await message.reply_text("The message has already been translated", do_quote=True)
         return
 
-    preview_url = extract_preview_url(replied_message, settings.TWITTER_PREVIEW_HOST)
-    source_url = extract_twitter_status_url(replied_message)
+    try:
+        preview_url = extract_preview_url(replied_message, settings.TWITTER_PREVIEW_HOST)
+        source_url = extract_twitter_status_url(replied_message)
+        urls = extract_message_urls(replied_message) if preview_url is None else []
+    except ValueError:
+        logger.exception("Invalid preview URL")
+        await message.reply_text("Could not fetch text from the replied preview message.", do_quote=True)
+        return
     source_type = "tweet"
     if preview_url is None:
-        urls = extract_message_urls(replied_message)
         fallback_url = urls[0] if urls else None
         if fallback_url is None:
             await message.reply_text("Could not find a URL in the replied message.", do_quote=False)
