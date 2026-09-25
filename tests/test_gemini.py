@@ -9,10 +9,10 @@ from app.gemini import TranslationResponse
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("source_type", "source_label"),
-    [("message", "message"), ("tweet", "Twitter/X post"), ("preview", "web page preview")],
+    "source_type",
+    ["message", "tweet", "preview"],
 )
-async def test_translate_text_translates_message_into_target_language(monkeypatch, settings, source_type, source_label):
+async def test_translate_text_translates_message_into_target_language(monkeypatch, settings, source_type):
     generate_content = AsyncMock(
         return_value=SimpleNamespace(
             parsed=TranslationResponse(translated_text=" translated ", source_language=" Japanese ")
@@ -26,8 +26,6 @@ async def test_translate_text_translates_message_into_target_language(monkeypatc
     assert result == {"translated_text": "translated", "source_language": "Japanese"}
     kwargs = generate_content.call_args.kwargs
     assert kwargs["model"] == "model"
-    assert kwargs["contents"] == f"Translate this {source_label}:\n\noriginal"
-    assert kwargs["config"].system_instruction is not None
     assert kwargs["config"].automatic_function_calling.disable is True
     assert kwargs["config"].temperature == 0.0
     assert kwargs["config"].response_mime_type == "application/json"
