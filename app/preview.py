@@ -197,7 +197,7 @@ async def validate_public_http_url(url: str) -> None:
 
     if not addresses:
         raise ValueError("Could not resolve preview URL host")
-    if any(not address.is_global for address in addresses):
+    if any(not address.is_global or address.is_multicast or address.is_reserved for address in addresses):
         raise ValueError("Preview URL resolves to a non-public address")
 
 
