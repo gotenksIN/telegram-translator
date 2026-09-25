@@ -33,36 +33,6 @@ Enforce Telegram delivery and throughput constraints:
 - Attach link preview options to the preview translation reply.
 - Check and reject replied messages originating from the bot itself.
 
-Use semantic line breaks in Markdown prose: put each complete sentence on its own source line.
-Use active voice, present tense, ASD-STE100 short sentences, and sentence-case headings.
-Do not use exclamation points in documentation.
-
-## Testing principles
-
-Test contracts through public or executable interfaces.
-Assert outputs, side effects, errors, and externally visible state that distinguish a conforming implementation from a broken one.
-Every test must protect a behavioral contract.
-Remove tests that only prove a feature, API, command, handler, or registration exists.
-Let the typechecker enforce static type relationships.
-Do not add runtime tests that a typecheck alone satisfies.
-
-Test adapters against project-owned contracts at the integration boundary.
-Do not simulate external providers or encode assumptions about their payload, event, or API shapes in unit tests.
-For adapters such as Telegram, Gemini, or HTTP/yt-dlp, verify only the translation and behavior the project owns.
-Do not test private structure, helper names, prompt prose, or internal mock topologies.
-
-## Simplicity (YAGNI)
-
-Implement only current, explicit requirements.
-Do not add speculative features, abstractions, configuration, dependencies, or extensibility for hypothetical future use.
-Prefer the smallest clear change that reuses existing code and standard facilities.
-Delete obsolete code when safe.
-
-Before writing a utility or adding a dependency, search the repository for an existing implementation and its callers.
-Then check the standard library and already-declared dependencies.
-Reuse an established option when it fits.
-Ask before adding a new dependency.
-
 ## Validation matrix
 
 Run only checks strictly relevant to the changed files.
@@ -80,24 +50,3 @@ For documentation or instruction edits, do not run pytest, ruff, or CLI commands
 | Python production or test files | `uv run ruff check <changed-file>` and `uv run ruff format --check <changed-file>`. |
 
 Run the full pytest suite only when the user explicitly requests it or when a change touches cross-module boundaries without clear ownership.
-
-## Git workflow
-
-Never create commits unless the user explicitly asks for them.
-When the user requests per-task commits, commit each discrete task before starting the next one.
-Before every commit, run the exact full commands `git status`, `git diff`, and `git log -10`.
-Do not replace these required inspections with abbreviated variants such as `git status --short`, `git diff --stat`, or `git log --oneline`.
-Read the full commit messages from `git log -10`, including their bodies and trailers.
-Stage only files that belong to the current task.
-
-Format commit messages per repository conventions:
-- Use the subject format `<scope>: <Capitalized summary>`. Derive the lowercase scope from the component or directory you changed.
-- Write the summary in the imperative mood and do not end it with a period.
-- Keep the subject near 50 characters and never longer than 72 characters.
-- Add a concise, technical body when the subject does not provide enough context. Explain what changed and why.
-- Separate the subject from the body with a blank line and wrap body text at 72 characters.
-
-Check commit signing once per session with `git config commit.gpgsign` and `git config user.signingkey`.
-Remember the result for the rest of the session.
-If both are set, sign every commit with the configured method and use `git commit --signoff`.
-Do not amend commits, push, or rewrite history unless the user explicitly asks.
