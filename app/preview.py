@@ -5,11 +5,12 @@ import html
 import io
 import ipaddress
 import json
+import multiprocessing
 import re
 import socket
 import time
 import urllib.request
-from asyncio import get_running_loop, timeout, to_thread, wait_for
+from asyncio import get_running_loop, timeout, to_thread
 from urllib.parse import ParseResult, urljoin, urlparse, urlunparse
 
 import httpx
@@ -250,12 +251,32 @@ def _resolve_host_addresses(hostname: str, port: int | None) -> set[ipaddress.IP
 async def fetch_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None = None) -> str:
     if is_youtube_post_url(url):
         return await fetch_youtube_post_text(url, timeout_seconds)
-    try:
-        return await wait_for(
-            to_thread(_extract_youtube_preview_text, url, timeout_seconds, cookies_path), timeout_seconds
-        )
-    except TypeError as exc:
-        raise ValueError(str(exc)) from exc
+    async with timeout(timeout_seconds):
+        await validate_public_http_url(url)
+        context = multiprocessing.get_context("spawn")
+        parent, child = context.Pipe(duplex=False)
+        worker = context.Process(target=_youtube_worker, args=(child, url, timeout_seconds, cookies_path))
+        try:
+            worker.start()
+            child.close()
+            try:
+                status, value = await to_thread(parent.recv)
+            except EOFError as exc:
+                raise ValueError("Could not extract YouTube metadata") from exc
+            if status != "ok":
+                raise ValueError(value)
+            return value
+        finally:
+            parent.close()
+            child.close()
+            if worker.is_alive():
+                worker.terminate()
+                worker.join(timeout=1)
+                if worker.is_alive():
+                    worker.kill()
+                    worker.join()
+            elif worker.exitcode is not None:
+                worker.join()
 
 
 def is_youtube_post_url(url: str) -> bool:
@@ -288,6 +309,16 @@ def extract_youtube_post_text(page_html: str) -> str | None:
         if isinstance(text, str):
             return _clean_preview_text(text) or None
     return None
+
+
+def _youtube_worker(pipe, url: str, timeout_seconds: float, cookies_path: str | None) -> None:
+    try:
+        result = _extract_youtube_preview_text(url, timeout_seconds, cookies_path)
+        pipe.send(("ok", result))
+    except Exception as exc:  # noqa: BLE001
+        pipe.send(("error", str(exc)))
+    finally:
+        pipe.close()
 
 
 def _extract_youtube_preview_text(url: str, timeout_seconds: float, cookies_path: str | None) -> str:
