@@ -63,7 +63,7 @@ async def test_translate_message_validates_reply(command_objects, reply, expecte
     update, context, message, _ = command_objects
     message.reply_to_message = reply
     await main.translate_message_command(update, context)
-    kwargs = {"do_quote": True} if quoted else {}
+    kwargs = {"do_quote": quoted}
     message.reply_text.assert_awaited_once_with(expected, **kwargs)
 
 
@@ -130,7 +130,7 @@ async def test_translate_preview_validates_reply(command_objects, reply, expecte
     update, context, message, _ = command_objects
     message.reply_to_message = reply
     await main.translate_preview_command(update, context)
-    kwargs = {"do_quote": True} if quoted else {}
+    kwargs = {"do_quote": quoted}
     message.reply_text.assert_awaited_once_with(expected, **kwargs)
 
 

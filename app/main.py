@@ -57,7 +57,7 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
 
     replied_message = message.reply_to_message
     if replied_message is None:
-        await message.reply_text("Please reply to a message containing a URL to translate its preview")
+        await message.reply_text("Please reply to a message containing a URL to translate its preview", do_quote=False)
         return
 
     if replied_message.from_user and replied_message.from_user.id == context.bot.id:
@@ -71,7 +71,7 @@ async def translate_preview_command(update: Update, context: ContextTypes.DEFAUL
         urls = extract_message_urls(replied_message)
         fallback_url = urls[0] if urls else None
         if fallback_url is None:
-            await message.reply_text("Could not find a URL in the replied message.")
+            await message.reply_text("Could not find a URL in the replied message.", do_quote=False)
             return
         preview_url = fallback_url
         source_url = fallback_url
@@ -139,7 +139,7 @@ async def translate_message_command(update: Update, context: ContextTypes.DEFAUL
 
     replied_message = message.reply_to_message
     if replied_message is None:
-        await message.reply_text("Please reply to a message to translate its text")
+        await message.reply_text("Please reply to a message to translate its text", do_quote=False)
         return
 
     if replied_message.from_user and replied_message.from_user.id == context.bot.id:
@@ -148,7 +148,7 @@ async def translate_message_command(update: Update, context: ContextTypes.DEFAUL
 
     source_text = replied_message.text or replied_message.caption
     if not source_text:
-        await message.reply_text("The replied message has no text to translate.")
+        await message.reply_text("The replied message has no text to translate.", do_quote=False)
         return
 
     if len(source_text) > TELEGRAM_MESSAGE_LIMIT:

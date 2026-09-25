@@ -294,7 +294,9 @@ The bot observes Telegram platform limits and interaction conventions:
   For `/translate_preview`, the preview translation reply includes `LinkPreviewOptions(url=preview_url, prefer_large_media=True, show_above_text=False)`.
 - **Self-reply guard:**
   When a user replies to a message sent by the bot itself, the bot rejects the request:
-  `"The message has already been translated"`.
+   `"The message has already been translated"`.
+- **Unquoted replies:**
+   Missing-reply, missing-URL, and empty-message notices explicitly disable quoting.
 - **Typing indicators:**
   The bot sends `ChatAction.TYPING` while translations are in progress.
 - **Command menu:**
